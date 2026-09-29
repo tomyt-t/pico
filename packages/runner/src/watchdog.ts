@@ -155,11 +155,13 @@ export async function guardExecution(
         "manifest.json",
       );
       const record = await readJson<RunRecord>(runDir, "run.json");
-      deadline = performance.now() + snapshot.request.timeoutMs;
+      const limit = snapshot.request.timeoutMs;
+      deadline =
+        limit === null ? Number.POSITIVE_INFINITY : performance.now() + limit;
       await atomicJson(join(runDir, "execution-started.json"), {
         token,
         startedAt: new Date().toISOString(),
-        deadline: Date.now() + snapshot.request.timeoutMs,
+        deadline: limit === null ? null : Date.now() + limit,
       });
       if (await exists(join(runDir, "cancel.json"))) {
         await stop("cancelled");

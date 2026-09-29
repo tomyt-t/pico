@@ -556,6 +556,8 @@ export const en: Dictionary = {
     allowExecution: "Allow experiments to execute on this machine",
     runLimit: "Run time limit (seconds)",
     stepLimit: "Model steps per turn",
+    limitHint:
+      "Empty fields remove the ceiling. Without a time limit, a run ends only when it finishes or is cancelled; without a step limit, Pico continues until it ends the turn or is interrupted.",
     savedProvider: "Saved provider: {{detail}}",
     checkingConfiguration: "Checking configuration…",
     checking: "Checking…",

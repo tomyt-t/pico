@@ -76,9 +76,10 @@ export class ResearchOperations {
             "BAD_REQUEST",
             "Enable local execution in laboratory settings first",
           );
+        const timeoutSeconds = request.timeoutSeconds ?? settings.maxRunSeconds;
         if (
-          (request.timeoutSeconds ?? settings.maxRunSeconds) >
-          settings.maxRunSeconds
+          settings.maxRunSeconds !== null &&
+          (timeoutSeconds === null || timeoutSeconds > settings.maxRunSeconds)
         )
           throw new LabError(
             "BAD_REQUEST",
@@ -103,7 +104,7 @@ export class ResearchOperations {
             experiment,
             datasets,
             request,
-            timeoutSeconds: request.timeoutSeconds ?? settings.maxRunSeconds,
+            timeoutSeconds,
           });
           this.acceptRun(submitted);
           return this.lab.getRecord<Run>(labId, "run", run.id);

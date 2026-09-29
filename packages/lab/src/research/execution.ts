@@ -26,7 +26,15 @@ export interface Submission {
   experiment: Experiment;
   datasets: DatasetVersion[];
   request: RunRequest;
-  timeoutSeconds?: number;
+  /** null grants no deadline; undefined falls back to the request. */
+  timeoutSeconds?: number | null;
+}
+function timeoutMs(
+  granted: number | null | undefined,
+  requested: number | undefined,
+): number | null {
+  const seconds = granted !== undefined ? granted : (requested ?? 60);
+  return seconds === null ? null : seconds * 1000;
 }
 export type OperationalRunner = Awaited<ReturnType<typeof createRunner>>;
 /** Converts immutable operational observations into scientific projections. */
@@ -86,10 +94,15 @@ export class ResearchExecution {
         run.labId,
         request.referenceRunId,
       );
-      const allowedSeconds = input.timeoutSeconds ?? request.timeoutSeconds;
+      const allowedSeconds =
+        input.timeoutSeconds !== undefined
+          ? input.timeoutSeconds
+          : request.timeoutSeconds;
       if (
         allowedSeconds !== undefined &&
-        reference.request.timeoutMs > allowedSeconds * 1000
+        allowedSeconds !== null &&
+        (reference.request.timeoutMs === null ||
+          reference.request.timeoutMs > allowedSeconds * 1000)
       )
         throw new RunnerError(
           "The preserved run timeout exceeds the current laboratory limit; increase the limit before reproducing these conditions",
@@ -134,8 +147,7 @@ export class ResearchExecution {
           datasetIds: experiment.datasetVersionIds,
           entrypoint: experiment.entrypoint,
           args: request.args ?? [],
-          timeoutMs:
-            (input.timeoutSeconds ?? request.timeoutSeconds ?? 60) * 1000,
+          timeoutMs: timeoutMs(input.timeoutSeconds, request.timeoutSeconds),
           runtime: experiment.runtime,
           ...(request.resources && { resources: request.resources }),
         },

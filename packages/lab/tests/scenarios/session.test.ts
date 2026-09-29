@@ -37,7 +37,10 @@ async function waitUntil(
   }
   throw new Error("Scenario did not reach the expected state");
 }
-async function fixture(adapter?: ModelAdapter, maxModelSteps = 12) {
+async function fixture(
+  adapter?: ModelAdapter,
+  maxModelSteps: number | null = 12,
+) {
   const root = await mkdtemp(join(tmpdir(), "pico-session-test-"));
   const store = createStorage(root);
   const lab = createLaboratory(store);
@@ -219,6 +222,23 @@ test("pauses after its bounded block, completes pending tools, and continues the
   await waitUntil(() => f.turn(turn.id).status === "completed");
   expect(f.turn(turn.id).steps).toBe(3);
   expect(f.lab.conversationView(f.labId).turns).toHaveLength(1);
+});
+
+test("an unlimited step budget continues past the largest bounded block without pausing", async () => {
+  let calls = 0;
+  const f = await fixture(
+    async () =>
+      ++calls <= 105
+        ? {
+            content: "",
+            calls: [{ id: `read-${calls}`, name: "read_lab", arguments: {} }],
+          }
+        : reply(),
+    null,
+  );
+  const turn = f.session.enqueue(f.labId, "Inspect the lab", intent());
+  await waitUntil(() => f.turn(turn.id).status === "completed", 20_000);
+  expect(f.turn(turn.id).steps).toBe(106);
 });
 
 test("recovers a tool whose mutation committed before its result was recorded without duplicating scientific entities", async () => {

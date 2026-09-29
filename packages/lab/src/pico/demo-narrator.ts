@@ -193,7 +193,7 @@ export function demoReply(lab: Laboratory, turn: Turn): ModelReply {
       experimentId: experiment.id,
       timeoutSeconds: Math.min(
         30,
-        lab.getLab(turn.labId).settings.maxRunSeconds,
+        lab.getLab(turn.labId).settings.maxRunSeconds ?? 30,
       ),
       config: { seed: 0, demonstration: true },
     });

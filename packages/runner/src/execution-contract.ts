@@ -54,7 +54,8 @@ export interface RunRequest {
   datasetIds?: string[];
   entrypoint: string;
   args?: string[];
-  timeoutMs: number;
+  /** null runs without a deadline; cancellation and interruption still stop it. */
+  timeoutMs: number | null;
   runtime?: "python" | "uv";
   referenceRunId?: string;
   resources?: { memoryMiB?: number; gpuDevices?: string[] };

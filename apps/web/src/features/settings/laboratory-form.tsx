@@ -24,8 +24,12 @@ export function LabForm({
   const [execution, setExecution] = useState(
     lab?.settings.executionEnabled ?? false,
   );
-  const [seconds, setSeconds] = useState(lab?.settings.maxRunSeconds ?? 120);
-  const [steps, setSteps] = useState(lab?.settings.maxModelSteps ?? 16);
+  const [seconds, setSeconds] = useState(
+    lab ? String(lab.settings.maxRunSeconds ?? "") : "120",
+  );
+  const [steps, setSteps] = useState(
+    lab ? String(lab.settings.maxModelSteps ?? "") : "16",
+  );
   const [tokens, setTokens] = useState(
     String(lab?.settings.maxModelTokens ?? ""),
   );
@@ -42,9 +46,9 @@ export function LabForm({
         event.preventDefault();
         const settings: LabSettings = {
           executionEnabled: execution,
-          maxRunSeconds: seconds,
+          maxRunSeconds: seconds ? Number(seconds) : null,
           maxConcurrentRuns: lab?.settings.maxConcurrentRuns ?? 1,
-          maxModelSteps: steps,
+          maxModelSteps: steps ? Number(steps) : null,
           maxModelTokens: tokens ? Number(tokens) : null,
           maxModelCostUsd: cost ? Number(cost) : null,
           provider: selection.configuration,
@@ -102,11 +106,11 @@ export function LabForm({
           <input
             name="runTimeLimit"
             type="number"
-            required
             min={1}
             max={86400}
             value={seconds}
-            onChange={(e) => setSeconds(Number(e.target.value))}
+            onChange={(e) => setSeconds(e.target.value)}
+            placeholder={t("operations.unlimited")}
           />
         </label>
         <label className="field">
@@ -114,14 +118,15 @@ export function LabForm({
           <input
             name="turnStepLimit"
             type="number"
-            required
             min={1}
             max={100}
             value={steps}
-            onChange={(e) => setSteps(Number(e.target.value))}
+            onChange={(e) => setSteps(e.target.value)}
+            placeholder={t("operations.unlimited")}
           />
         </label>
       </div>
+      <p className="meta">{t("settings.limitHint")}</p>
       {lab && (
         <div className="stack">
           <div className="actions">

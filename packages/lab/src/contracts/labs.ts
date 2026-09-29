@@ -4,9 +4,11 @@ import { optionalText, text } from "@/lab/contracts/validation";
 
 export interface LabSettings {
   executionEnabled: boolean;
-  maxRunSeconds: number;
+  /** null runs without a deadline; cancellation still stops the run. */
+  maxRunSeconds: number | null;
   maxConcurrentRuns: number;
-  maxModelSteps: number;
+  /** null lets a turn continue until the model stops or the researcher interrupts. */
+  maxModelSteps: number | null;
   /** Observed usage per work block; continuing grants a new block. Not a prepaid cap. */
   maxModelTokens?: number | null;
   maxModelCostUsd?: number | null;
@@ -32,9 +34,9 @@ export interface CreateLabInput {
 export const settingsSchema = z
   .object({
     executionEnabled: z.boolean(),
-    maxRunSeconds: z.number().int().min(1).max(86_400),
+    maxRunSeconds: z.number().int().min(1).max(86_400).nullable(),
     maxConcurrentRuns: z.number().int().min(1).max(16),
-    maxModelSteps: z.number().int().min(1).max(100),
+    maxModelSteps: z.number().int().min(1).max(100).nullable(),
     maxModelTokens: z
       .number()
       .int()

@@ -561,6 +561,8 @@ export const ptBR = {
     allowExecution: "Permitir que experimentos executem nesta máquina",
     runLimit: "Tempo limite por execução (segundos)",
     stepLimit: "Passos do modelo por turno",
+    limitHint:
+      "Campos vazios removem o teto. Sem tempo limite, um run só termina ao concluir ou ser cancelado; sem limite de passos, Pico continua até encerrar o turno ou ser interrompido.",
     savedProvider: "Provedor salvo: {{detail}}",
     checkingConfiguration: "Verificando configuração…",
     checking: "Verificando…",

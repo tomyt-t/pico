@@ -136,7 +136,8 @@ resposta assinada do assistente. Erros de janela de contexto reduzem um orçamen
 persistido e tentam uma projeção menor; uma janela insuficiente para as próprias
 instruções/tools requer trocar o modelo, com todo o trabalho anterior preservado.
 
-Cada bloco de trabalho limita passos e pode limitar tokens/custo observados.
+Cada bloco de trabalho pode limitar passos e tokens/custo observados; `null`
+remove o teto correspondente, inclusive o prazo dos runs.
 O consumo agrega as respostas persistidas, inclusive respostas recusadas ou
 interrompidas que informem uso. Ausência de preço/tokens é desconhecimento,
 nunca custo zero comprovado. A pausa ocorre antes da próxima chamada quando o

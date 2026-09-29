@@ -49,8 +49,9 @@ calling. Configure base URL, modelo e nome da variável de ambiente da chave.
 Seu botão de conexão consulta `/models`; a resposta não garante disponibilidade
 para geração. Endpoints locais HTTP são permitidos; remotos exigem HTTPS.
 
-Cada bloco de trabalho tem limite de passos e pode ter limites de tokens e custo
-informados pelo provedor. A conversa mostra o consumo acumulado; valores sem
+Cada bloco de trabalho pode ter limites de passos, tokens e custo informados
+pelo provedor. Sem limite de passos, o turno segue até Pico encerrá-lo ou o
+pesquisador interrompê-lo. A conversa mostra o consumo acumulado; valores sem
 metadados do provedor ficam sinalizados como desconhecidos. Se você configurou
 um limite cujo consumo não foi informado, Pico pausa antes de outra chamada.
 Deixe o campo vazio para remover o limite correspondente.
@@ -121,6 +122,9 @@ CUDA (`gpuDevices`, incluindo `[]` para desativar CUDA). Não são quotas de RAM
 somada da árvore, tempo de GPU, CPU ou disco. Em plataformas sem suporte os
 campos ficam desativados e a API recusa pedidos que não conseguiria cumprir.
 Cancelamento e timeout enviam SIGTERM antes de SIGKILL com prazo curto.
+Sem tempo limite no laboratório, o run fica sem prazo (`timeoutMs: null` no
+snapshot) e termina ao concluir ou ser cancelado. Reproduzir esse run exige que o
+laboratório também esteja sem tempo limite.
 
 Depois do término confirmado, **Limpar ambiente descartável** remove `work/`
 e a `.venv`, mantendo snapshot, observações e logs. As cópias verificadas usam

@@ -41,11 +41,14 @@ export function validateRequest(
   if (!request.protocol.trim())
     throw new RunnerError("An execution requires a protocol");
   if (
-    !Number.isSafeInteger(request.timeoutMs) ||
-    request.timeoutMs < 100 ||
-    request.timeoutMs > 24 * 60 * 60 * 1_000
+    request.timeoutMs !== null &&
+    (!Number.isSafeInteger(request.timeoutMs) ||
+      request.timeoutMs < 100 ||
+      request.timeoutMs > 24 * 60 * 60 * 1_000)
   )
-    throw new RunnerError("Timeout must be between 100 ms and 24 hours");
+    throw new RunnerError(
+      "Timeout must be between 100 ms and 24 hours, or null for no deadline",
+    );
   if (
     request.runtime &&
     request.runtime !== "python" &&

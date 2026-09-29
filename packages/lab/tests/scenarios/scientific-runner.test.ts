@@ -728,6 +728,46 @@ test("reproduction cannot bypass a reduced laboratory timeout", async () => {
   expect(await f.runner.allRuns()).toHaveLength(1);
 });
 
+test("a run without a deadline preserves that choice and cannot be reproduced under a bounded limit", async () => {
+  const f = await fixture();
+  await f.runner.writeFile("lab-1", f.experiment.id, {
+    path: "main.py",
+    content: "print('unbounded')",
+  });
+  await f.runner.submit({
+    run: f.run(),
+    experiment: f.experiment,
+    datasets: [],
+    request: {},
+    timeoutSeconds: null,
+  });
+  expect((await f.runner.waitForRun("lab-1", "run-1")).status).toBe(
+    "succeeded",
+  );
+  expect(
+    (await f.runner.runner.getSnapshot("lab-1", "run-1")).request.timeoutMs,
+  ).toBeNull();
+  await expect(
+    f.runner.submit({
+      run: { ...f.run("run-2"), referenceRunId: "run-1" },
+      experiment: f.experiment,
+      datasets: [],
+      request: { referenceRunId: "run-1" },
+      timeoutSeconds: 86_400,
+    }),
+  ).rejects.toThrow("current laboratory limit");
+  await f.runner.submit({
+    run: { ...f.run("run-3"), referenceRunId: "run-1" },
+    experiment: f.experiment,
+    datasets: [],
+    request: { referenceRunId: "run-1" },
+    timeoutSeconds: null,
+  });
+  expect((await f.runner.waitForRun("lab-1", "run-3")).status).toBe(
+    "succeeded",
+  );
+});
+
 test("accepts the maximum public laboratory timeout and concurrency settings", async () => {
   const f = await fixture();
   await f.runner.close();

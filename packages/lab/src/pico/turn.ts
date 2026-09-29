@@ -90,7 +90,9 @@ export async function runTurn(
     const tools = createTools(research, turn.labId, signal);
     // Completion is an analysis trigger, not an authorization for an unbounded run chain.
     if (turn.trigger === "run_completed") tools.delete("start_run");
-    const ceiling = turn.steps + lab.getLab(turn.labId).settings.maxModelSteps;
+    const stepBudget = lab.getLab(turn.labId).settings.maxModelSteps;
+    const ceiling =
+      stepBudget === null ? Number.POSITIVE_INFINITY : turn.steps + stepBudget;
     while (!signal.aborted) {
       const pending = conversations
         .messagesForTurns(turn.labId, [turn.id])
@@ -137,7 +139,7 @@ export async function runTurn(
         save({
           ...turn,
           status: "paused",
-          error: `Reached the ${lab.getLab(turn.labId).settings.maxModelSteps}-step turn budget. Continue to grant another block of work.`,
+          error: `Reached the ${stepBudget}-step turn budget. Continue to grant another block of work.`,
           endedAt: now(),
         });
         return;
