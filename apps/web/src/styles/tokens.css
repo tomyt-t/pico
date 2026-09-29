@@ -1,0 +1,33 @@
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#f6f6fa, #121218);
+  --surface: light-dark(#fff, #191920);
+  --soft: light-dark(#eff0f7, #212129);
+  --tint: light-dark(#f3f4fb, #1c1c24);
+  --border: light-dark(#d9dbe3, #2e2e39);
+  --ink: light-dark(#18181b, #e9e9ef);
+  --secondary: light-dark(#52525b, #b3b3c0);
+  --muted: light-dark(#62626d, #9696a5);
+  --accent: light-dark(#4f46e5, #6d64ea);
+  --accent-ink: light-dark(#4338ca, #b0aaff);
+  --accent-soft: light-dark(#e8eaff, #27243d);
+  --success: light-dark(#0f766e, #4fd1c5);
+  --success-soft: light-dark(#ecfdf5, #153431);
+  --warning: light-dark(#945904, #f1c56b);
+  --warning-soft: light-dark(#fffbeb, #332b18);
+  --danger: light-dark(#b42318, #ffaaa5);
+  --danger-soft: light-dark(#fff1f2, #3a2024);
+  font-family:
+    "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+  font-synthesis: none;
+  color: var(--ink);
+  background: var(--bg);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}

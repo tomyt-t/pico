@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+artifacts/
+.env
+.env.*
+!.env.example
+.pico/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.DS_Store
+
+# Historical compatibility fixtures must be versioned byte-for-byte.
+!packages/lab/tests/fixtures/**/pico.sqlite

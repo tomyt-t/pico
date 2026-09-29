@@ -1,0 +1,54 @@
+.markdown {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown h1 {
+  font-size: 23px;
+  margin-top: 24px;
+}
+.markdown h2 {
+  font-size: 19px;
+  margin: 24px 0 12px;
+}
+.markdown h3 {
+  font-size: 15px;
+  margin: 20px 0 10px;
+}
+.markdown pre {
+  white-space: pre;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: var(--tint);
+  padding: 15px;
+  border-radius: 5px;
+}
+.markdown :not(pre) > code {
+  padding: 2px 4px;
+  background: var(--soft);
+  border-radius: 3px;
+}
+.markdown blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 15px;
+  margin-left: 0;
+  color: var(--secondary);
+}
+.markdown table {
+  display: block;
+  overflow: auto;
+  border-collapse: collapse;
+}
+.markdown td,
+.markdown th {
+  padding: 8px;
+  border: 1px solid var(--border);
+}
+.message-assistant .markdown {
+  white-space: normal;
+}

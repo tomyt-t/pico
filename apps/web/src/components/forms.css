@@ -1,0 +1,82 @@
+.form {
+  display: grid;
+  gap: 16px;
+}
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--secondary);
+}
+.field small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.field textarea {
+  min-height: 80px;
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+.setup {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 30px 20px;
+}
+.setup-card {
+  width: min(560px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 34px;
+}
+.setup-card > .notice {
+  margin-bottom: 20px;
+}
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #00000065;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: min(620px, 100%);
+  padding: 26px;
+  max-height: 90dvh;
+  overflow: auto;
+}
+.modal-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.modal-heading h2 {
+  font-size: 20px;
+}
+.modal > .notice {
+  margin-bottom: 16px;
+}
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.modal::backdrop {
+  background: #00000070;
+}
+.modal {
+  color: var(--ink);
+}

@@ -1,0 +1,64 @@
+import {createHash} from "node:crypto";
+import {mkdtemp, mkdir, readFile, readdir, rm, writeFile} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join,resolve} from "node:path";
+import {createModels,fauxProvider,fauxAssistantMessage} from "@earendil-works/pi-ai";
+import {Store} from "@/server/storage/store";
+import {LabService} from "@/server/lab/service";
+import {ResearchOperations} from "@/server/lab/operations";
+import {createRunner} from "@/server/runner";
+import {createPiAdapter} from "@/server/pico/pi-adapter";
+import {PicoSession} from "@/server/pico/session";
+import type {ModelStep} from "@/server/pico/provider";
+import type {Message,MutationContext,Turn} from "@/shared/contracts";
+const target=resolve(process.argv[2]??"legacy-v1");
+await mkdir(target,{recursive:true});
+const temporary=await mkdtemp(join(tmpdir(),"pico-legacy-writer-"));
+const store=new Store(join(temporary,"data"));
+const lab=new LabService(store);
+const intent=(key:string):MutationContext=>({key,actor:{kind:"researcher"}});
+const laboratory=lab.createLab({name:"Synthetic legacy compatibility laboratory",researchLine:"Preserve historical bytes, IDs and native signed transcript",settings:{executionEnabled:true,maxModelSteps:2,provider:{mode:"pi",provider:"faux",model:"fixture-model",thinking:"high",baseUrl:"https://unused.invalid",apiKeyEnv:"UNUSED_SYNTHETIC_FIXTURE_KEY"}}},intent("fixture-lab"));
+let operations:ResearchOperations|undefined;
+const runner=await createRunner({dataDir:store.dataDir,onUpdate:run=>{operations?.acceptRun(run);}});
+operations=new ResearchOperations(lab,runner);
+const models=createModels();
+const faux=fauxProvider({provider:"faux",tokensPerSecond:1000000,tokenSize:{min:1024,max:1024},models:[{id:"fixture-model",reasoning:true,input:["text"]}]});
+models.setProvider(faux.provider);
+const native=fauxAssistantMessage([
+ {type:"thinking",thinking:"Synthetic compatibility trace; no external research.",thinkingSignature:"legacy-v1-thinking-signature"},
+ {type:"text",text:"I will preserve a synthetic research question.",textSignature:"legacy-v1-text-signature"},
+ {type:"toolCall",id:"legacy-create-question",name:"create_question",arguments:{text:"Does the preserved fixed sample have mean 2.5?",context:"Synthetic fixture produced with the pre-refactor writer."},thoughtSignature:"legacy-v1-call-signature"},
+],{stopReason:"toolUse",responseId:"legacy-v1-native-response",timestamp:1750000000000});
+native.responseModel="fixture-model-resolved";
+native.providerThinkingLevel="high";
+faux.setResponses([native,fauxAssistantMessage("The synthetic question is recorded.")]);
+const session=new PicoSession(operations,undefined,createPiAdapter({models:async()=>models}));
+try {
+ const turn=session.enqueue(laboratory.id,"Record the synthetic compatibility question",intent("fixture-native-turn"));
+ for(let i=0;i<1000;i++){if(store.get<Turn>("turn",turn.id)?.status==="completed")break;await Bun.sleep(10);}
+ if(store.get<Turn>("turn",turn.id)?.status!=="completed")throw new Error("Synthetic native turn did not complete");
+ await session.close();
+ const question=lab.overview(laboratory.id).questions[0];if(!question)throw new Error("Native tool failed to create question");
+ const dataset=await operations.registerDataset(laboratory.id,{name:"Synthetic fixed samples",version:"legacy-v1",description:"Four authored numbers, no external data",source:"Hand-authored compatibility fixture",license:"CC0",splits:{fixture:4},files:[{path:"samples.json",content:"[1, 2, 3, 4]\n"}]},intent("fixture-dataset"));
+ const experiment=lab.createExperiment(laboratory.id,{title:"Historical preserved mean",objective:"Preserve a real local execution in historical v1 formats",protocol:"Read the immutable synthetic dataset, calculate arithmetic mean, write metrics and observations. No network access.",questionIds:[question.id],datasetVersionIds:[dataset.id],runtime:"python",entrypoint:"experiment.py",status:"ready"},intent("fixture-experiment"));
+ const program=`import json, os\nfrom pathlib import Path\nsource = next(Path(os.environ['PICO_INPUTS_DIR']).glob('*/samples.json'))\nvalues = json.loads(source.read_text())\nmean = sum(values) / len(values)\noutputs = Path(os.environ['PICO_OUTPUT_DIR'])\n(outputs / 'metrics.json').write_text(json.dumps([{'name':'mean','value':mean,'unit':'score','split':'fixture'},{'name':'count','value':len(values),'unit':'examples','split':'fixture'}]))\n(outputs / 'observations.json').write_text(json.dumps({'values':values,'mean':mean}))\nprint(f'Legacy fixture measured mean={mean} from {len(values)} samples')\n`;
+ await runner.writeFile(laboratory.id,experiment.id,{path:"experiment.py",content:program});
+ const submitted=await operations.startRun(laboratory.id,experiment.id,{config:{fixture:"legacy-v1",seed:0},timeoutSeconds:20},intent("fixture-run"));
+ const completed=await runner.waitForRun(laboratory.id,submitted.id);operations.acceptRun(completed);
+ if(completed.status!=="succeeded")throw new Error(`Local fixture run failed: ${completed.error}`);
+ const result=lab.recordResult(laboratory.id,{experimentId:experiment.id,runIds:[completed.id],observations:"The preserved local run measured mean=2.5 and count=4.",interpretation:"The historical calculation is a deterministic compatibility reference.",limitations:"Synthetic scalar values; no scientific model evaluation."},intent("fixture-result"));
+ const revised=lab.reviseResult(laboratory.id,result.id,{limitations:"Synthetic scalar values and a simulated native transcript; no external model or generalization."},intent("fixture-result-revision"),"Clarify simulation provenance");
+ const conclusion=lab.recordConclusion(laboratory.id,{questionId:question.id,resultIds:[result.id],statement:"The fixed synthetic sample has arithmetic mean 2.5.",confidence:"low",limitations:"Compatibility fixture only."},intent("fixture-conclusion"));
+ const archive=await runner.exportRun(laboratory.id,completed.id);
+ const steps=store.list<ModelStep>("model_step",laboratory.id);
+ const toolMessages=store.list<Message>("message",laboratory.id).filter(message=>message.toolCall);
+ if(!toolMessages.some(message=>message.toolCall?.id==="legacy-create-question"&&message.toolCall.status==="completed"))throw new Error("Native tool result was not durably completed");
+ await runner.close();
+ const backup=store.backup(join(target,"backup"));
+ const writerSources:Record<string,string>={};
+ async function hashSources(relative="src"){for(const entry of await readdir(relative,{withFileTypes:true})){const path=join(relative,entry.name);if(entry.isDirectory())await hashSources(path);else writerSources[path]=createHash("sha256").update(await readFile(path)).digest("hex");}}
+ await hashSources();
+ await writeFile(join(target,"archive-v1.json"),JSON.stringify(archive,null,2)+"\n");
+ await writeFile(join(target,"expected.json"),JSON.stringify({format:"pico-legacy-fixture-v1",source:"Pre-refactor source tree, source hashes below",validation:{narration:"Pi faux provider, local simulation",execution:"Real local Python subprocess",externalServices:false},ids:{lab:laboratory.id,conversation:lab.getConversation(laboratory.id).id,turn:turn.id,question:question.id,dataset:dataset.id,experiment:experiment.id,run:completed.id,result:result.id,conclusion:conclusion.id},question,dataset,experiment,run:completed,result:revised,resultHistory:store.revisions(result.id),conclusion,modelSteps:steps,toolMessages,archiveSnapshotHash:archive.execution.snapshot.sha256,code:program,datasetBytes:"[1, 2, 3, 4]\n",backupManifest:JSON.parse(await readFile(join(backup,"manifest.json"),"utf8")),writerSources},null,2)+"\n");
+ console.log(JSON.stringify({target,ids:{lab:laboratory.id,run:completed.id},modelSteps:steps.length,toolMessages:toolMessages.length}));
+} finally {await session.close();await runner.close();store.close();await rm(temporary,{recursive:true,force:true});}

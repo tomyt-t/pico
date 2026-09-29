@@ -1,0 +1,17 @@
+{
+  "name": "@pico/lab",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/lab-runtime.ts",
+    "./contracts": "./src/contracts.ts",
+    "./administration": "./src/lab-administration.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.86.1",
+    "@earendil-works/pi-coding-agent": "0.86.1",
+    "pi-web-access": "0.30.0",
+    "zod": "4.1.12",
+    "@pico/runner": "workspace:*"
+  }
+}

@@ -1,0 +1,1 @@
+Read the immutable synthetic dataset, calculate arithmetic mean, write metrics and observations. No network access.

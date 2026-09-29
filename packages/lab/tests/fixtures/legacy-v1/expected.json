@@ -1,0 +1,555 @@
+{
+  "format": "pico-legacy-fixture-v1",
+  "source": "Pre-refactor source tree, source hashes below",
+  "validation": {
+    "narration": "Pi faux provider, local simulation",
+    "execution": "Real local Python subprocess",
+    "externalServices": false
+  },
+  "ids": {
+    "lab": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+    "conversation": "778e31fd-4c77-425e-8cfc-f85c124284c2",
+    "turn": "a1cec7b4-83fa-4d60-b775-08933ce7aecf",
+    "question": "8ae82c11-ef3a-41f0-817a-36c37a34dbf8",
+    "dataset": "f52ae371-5d2f-4a61-84b6-f2c733333543",
+    "experiment": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+    "run": "1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd",
+    "result": "879e65aa-72cd-4a0b-917e-53f41eb302d2",
+    "conclusion": "4955e9e1-ad54-4504-b3ca-cd48f8ef605d"
+  },
+  "question": {
+    "id": "8ae82c11-ef3a-41f0-817a-36c37a34dbf8",
+    "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+    "author": {
+      "kind": "pico",
+      "turnId": "a1cec7b4-83fa-4d60-b775-08933ce7aecf"
+    },
+    "revision": 1,
+    "createdAt": "2026-09-29T01:13:44.112Z",
+    "updatedAt": "2026-09-29T01:13:44.112Z",
+    "text": "Does the preserved fixed sample have mean 2.5?",
+    "context": "Synthetic fixture produced with the pre-refactor writer.",
+    "parentId": null,
+    "status": "open"
+  },
+  "dataset": {
+    "id": "f52ae371-5d2f-4a61-84b6-f2c733333543",
+    "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+    "author": {
+      "kind": "researcher"
+    },
+    "revision": 1,
+    "createdAt": "2026-09-29T01:13:44.126Z",
+    "updatedAt": "2026-09-29T01:13:44.126Z",
+    "name": "Synthetic fixed samples",
+    "version": "legacy-v1",
+    "description": "Four authored numbers, no external data",
+    "source": "Hand-authored compatibility fixture",
+    "license": "CC0",
+    "files": [
+      {
+        "path": "samples.json",
+        "size": 13,
+        "sha256": "faac8a0414a69ab286a6294635640fde5a1361b071f6b1cc06a6086c45c12e3e"
+      }
+    ],
+    "manifestHash": "4d817c1e083ca229adb8affa7aecc516d0ed31abc05641dcf5ae21be4533a381",
+    "splits": {
+      "fixture": 4
+    }
+  },
+  "experiment": {
+    "id": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+    "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+    "author": {
+      "kind": "researcher"
+    },
+    "revision": 1,
+    "createdAt": "2026-09-29T01:13:44.126Z",
+    "updatedAt": "2026-09-29T01:13:44.126Z",
+    "title": "Historical preserved mean",
+    "objective": "Preserve a real local execution in historical v1 formats",
+    "questionIds": [
+      "8ae82c11-ef3a-41f0-817a-36c37a34dbf8"
+    ],
+    "hypothesisIds": [],
+    "protocol": "Read the immutable synthetic dataset, calculate arithmetic mean, write metrics and observations. No network access.",
+    "criteria": [],
+    "datasetVersionIds": [
+      "f52ae371-5d2f-4a61-84b6-f2c733333543"
+    ],
+    "entrypoint": "experiment.py",
+    "runtime": "python",
+    "status": "ready"
+  },
+  "run": {
+    "id": "1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd",
+    "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+    "author": {
+      "kind": "researcher"
+    },
+    "revision": 1,
+    "createdAt": "2026-09-29T01:13:44.128Z",
+    "updatedAt": "2026-09-29T01:13:44.214Z",
+    "experimentId": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+    "attempt": 1,
+    "referenceRunId": null,
+    "status": "succeeded",
+    "target": "local",
+    "command": "python3 experiment.py",
+    "startedAt": "2026-09-29T01:13:44.186Z",
+    "endedAt": "2026-09-29T01:13:44.214Z",
+    "exitCode": 0,
+    "error": null,
+    "metrics": [
+      {
+        "name": "mean",
+        "value": 2.5,
+        "unit": "score",
+        "split": "fixture",
+        "step": null
+      },
+      {
+        "name": "count",
+        "value": 4,
+        "unit": "examples",
+        "split": "fixture",
+        "step": null
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "metrics.json",
+        "size": 140,
+        "sha256": "1c7c40e8cc69ff05ba6c0d421ca89532852d3433356bdf2c2743f51971437cb2",
+        "kind": "table"
+      },
+      {
+        "path": "observations.json",
+        "size": 37,
+        "sha256": "7048cb3988548a01703b70b343991480769a31ca831e6f1ac95195e8cf7dc358",
+        "kind": "table"
+      }
+    ],
+    "snapshot": {
+      "schemaVersion": 1,
+      "experimentId": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+      "experimentRevision": 1,
+      "protocol": "Read the immutable synthetic dataset, calculate arithmetic mean, write metrics and observations. No network access.",
+      "criteria": [],
+      "entrypoint": "experiment.py",
+      "runtime": "python",
+      "args": [],
+      "config": {
+        "fixture": "legacy-v1",
+        "seed": 0
+      },
+      "codeFiles": [
+        {
+          "path": "experiment.py",
+          "size": 581,
+          "sha256": "063c256ed8f69faf1abef69a8c683f59474963607badf822dbe983af33c07969"
+        }
+      ],
+      "codeHash": "5838dcd5c1e5e4a76a57f7cf3b36b1385c8bec7a342c8691a0d5d90e4421f52b",
+      "datasetInputs": [
+        {
+          "datasetVersionId": "f52ae371-5d2f-4a61-84b6-f2c733333543",
+          "name": "Synthetic fixed samples",
+          "version": "legacy-v1",
+          "manifestHash": "4d817c1e083ca229adb8affa7aecc516d0ed31abc05641dcf5ae21be4533a381",
+          "files": [
+            {
+              "path": "samples.json",
+              "size": 13,
+              "sha256": "faac8a0414a69ab286a6294635640fde5a1361b071f6b1cc06a6086c45c12e3e"
+            }
+          ]
+        }
+      ],
+      "environment": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "runtime": "python",
+        "runtimeVersion": "Python 3.9.6"
+      },
+      "createdAt": "2026-09-29T01:13:44.139Z"
+    }
+  },
+  "result": {
+    "id": "879e65aa-72cd-4a0b-917e-53f41eb302d2",
+    "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+    "author": {
+      "kind": "researcher"
+    },
+    "revision": 2,
+    "createdAt": "2026-09-29T01:13:44.222Z",
+    "updatedAt": "2026-09-29T01:13:44.223Z",
+    "experimentId": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+    "runIds": [
+      "1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd"
+    ],
+    "observations": "The preserved local run measured mean=2.5 and count=4.",
+    "interpretation": "The historical calculation is a deterministic compatibility reference.",
+    "limitations": "Synthetic scalar values and a simulated native transcript; no external model or generalization."
+  },
+  "resultHistory": [
+    {
+      "id": "revision-1",
+      "recordId": "879e65aa-72cd-4a0b-917e-53f41eb302d2",
+      "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+      "kind": "result",
+      "revision": 1,
+      "snapshot": {
+        "id": "879e65aa-72cd-4a0b-917e-53f41eb302d2",
+        "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+        "author": {
+          "kind": "researcher"
+        },
+        "revision": 1,
+        "createdAt": "2026-09-29T01:13:44.222Z",
+        "updatedAt": "2026-09-29T01:13:44.222Z",
+        "experimentId": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+        "runIds": [
+          "1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd"
+        ],
+        "observations": "The preserved local run measured mean=2.5 and count=4.",
+        "interpretation": "The historical calculation is a deterministic compatibility reference.",
+        "limitations": "Synthetic scalar values; no scientific model evaluation."
+      },
+      "reason": "Clarify simulation provenance",
+      "author": {
+        "kind": "researcher"
+      },
+      "createdAt": "2026-09-29T01:13:44.223Z"
+    }
+  ],
+  "conclusion": {
+    "id": "4955e9e1-ad54-4504-b3ca-cd48f8ef605d",
+    "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+    "author": {
+      "kind": "researcher"
+    },
+    "revision": 1,
+    "createdAt": "2026-09-29T01:13:44.223Z",
+    "updatedAt": "2026-09-29T01:13:44.223Z",
+    "questionId": "8ae82c11-ef3a-41f0-817a-36c37a34dbf8",
+    "statement": "The fixed synthetic sample has arithmetic mean 2.5.",
+    "resultIds": [
+      "879e65aa-72cd-4a0b-917e-53f41eb302d2"
+    ],
+    "paperIds": [],
+    "confidence": "low",
+    "limitations": "Compatibility fixture only.",
+    "status": "tentative",
+    "supersedesId": null
+  },
+  "modelSteps": [
+    {
+      "id": "ecead08a-f377-41d0-9f61-77db04948ae7",
+      "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+      "turnId": "a1cec7b4-83fa-4d60-b775-08933ce7aecf",
+      "step": 1,
+      "provider": {
+        "mode": "pi",
+        "baseUrl": "https://unused.invalid",
+        "model": "fixture-model",
+        "apiKeyEnv": "UNUSED_SYNTHETIC_FIXTURE_KEY",
+        "provider": "faux",
+        "thinking": "high"
+      },
+      "usage": {
+        "input": 4936,
+        "output": 61,
+        "cacheRead": 0,
+        "cacheWrite": 4936,
+        "totalTokens": 9933,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "native": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "thinking",
+            "thinking": "Synthetic compatibility trace; no external research.",
+            "thinkingSignature": "legacy-v1-thinking-signature"
+          },
+          {
+            "type": "text",
+            "text": "I will preserve a synthetic research question.",
+            "textSignature": "legacy-v1-text-signature"
+          },
+          {
+            "type": "toolCall",
+            "id": "legacy-create-question",
+            "name": "create_question",
+            "arguments": {
+              "text": "Does the preserved fixed sample have mean 2.5?",
+              "context": "Synthetic fixture produced with the pre-refactor writer."
+            },
+            "thoughtSignature": "legacy-v1-call-signature"
+          }
+        ],
+        "api": "faux:1790644424100:6wq6xe7n0t8",
+        "provider": "faux",
+        "model": "fixture-model",
+        "usage": {
+          "input": 4936,
+          "output": 61,
+          "cacheRead": 0,
+          "cacheWrite": 4936,
+          "totalTokens": 9933,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        },
+        "stopReason": "toolUse",
+        "responseId": "legacy-v1-native-response",
+        "timestamp": 1750000000000,
+        "responseModel": "fixture-model-resolved",
+        "providerThinkingLevel": "high"
+      },
+      "replayable": true,
+      "createdAt": "2026-09-29T01:13:44.112Z"
+    },
+    {
+      "id": "facee834-6f73-49f2-9ee1-7d91bd7f6310",
+      "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+      "turnId": "a1cec7b4-83fa-4d60-b775-08933ce7aecf",
+      "step": 2,
+      "provider": {
+        "mode": "pi",
+        "baseUrl": "https://unused.invalid",
+        "model": "fixture-model",
+        "apiKeyEnv": "UNUSED_SYNTHETIC_FIXTURE_KEY",
+        "provider": "faux",
+        "thinking": "high"
+      },
+      "usage": {
+        "input": 286,
+        "output": 9,
+        "cacheRead": 4870,
+        "cacheWrite": 287,
+        "totalTokens": 5452,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "native": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "The synthetic question is recorded."
+          }
+        ],
+        "api": "faux:1790644424100:6wq6xe7n0t8",
+        "provider": "faux",
+        "model": "fixture-model",
+        "usage": {
+          "input": 286,
+          "output": 9,
+          "cacheRead": 4870,
+          "cacheWrite": 287,
+          "totalTokens": 5452,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1790644424100
+      },
+      "replayable": true,
+      "createdAt": "2026-09-29T01:13:44.114Z"
+    }
+  ],
+  "toolMessages": [
+    {
+      "id": "ebd0cdab-7e50-4217-8f86-6eafaf4b7d78",
+      "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+      "conversationId": "778e31fd-4c77-425e-8cfc-f85c124284c2",
+      "turnId": "a1cec7b4-83fa-4d60-b775-08933ce7aecf",
+      "role": "tool",
+      "content": "",
+      "modelStepId": "ecead08a-f377-41d0-9f61-77db04948ae7",
+      "toolCall": {
+        "id": "legacy-create-question",
+        "name": "create_question",
+        "arguments": {
+          "text": "Does the preserved fixed sample have mean 2.5?",
+          "context": "Synthetic fixture produced with the pre-refactor writer."
+        },
+        "status": "completed",
+        "result": {
+          "id": "8ae82c11-ef3a-41f0-817a-36c37a34dbf8",
+          "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+          "author": {
+            "kind": "pico",
+            "turnId": "a1cec7b4-83fa-4d60-b775-08933ce7aecf"
+          },
+          "revision": 1,
+          "createdAt": "2026-09-29T01:13:44.112Z",
+          "updatedAt": "2026-09-29T01:13:44.112Z",
+          "text": "Does the preserved fixed sample have mean 2.5?",
+          "context": "Synthetic fixture produced with the pre-refactor writer.",
+          "parentId": null,
+          "status": "open"
+        }
+      },
+      "createdAt": "2026-09-29T01:13:44.112Z"
+    }
+  ],
+  "archiveSnapshotHash": "dcd30d287ed84a50061b824673c5301fd44f2d6c5daf5cf835a608c76b642ec2",
+  "code": "import json, os\nfrom pathlib import Path\nsource = next(Path(os.environ['PICO_INPUTS_DIR']).glob('*/samples.json'))\nvalues = json.loads(source.read_text())\nmean = sum(values) / len(values)\noutputs = Path(os.environ['PICO_OUTPUT_DIR'])\n(outputs / 'metrics.json').write_text(json.dumps([{'name':'mean','value':mean,'unit':'score','split':'fixture'},{'name':'count','value':len(values),'unit':'examples','split':'fixture'}]))\n(outputs / 'observations.json').write_text(json.dumps({'values':values,'mean':mean}))\nprint(f'Legacy fixture measured mean={mean} from {len(values)} samples')\n",
+  "datasetBytes": "[1, 2, 3, 4]\n",
+  "backupManifest": {
+    "format": "pico-backup-v1",
+    "createdAt": "2026-09-29T01:13:44.235Z",
+    "files": [
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/datasets/f52ae371-5d2f-4a61-84b6-f2c733333543/files/samples.json",
+        "sha256": "faac8a0414a69ab286a6294635640fde5a1361b071f6b1cc06a6086c45c12e3e",
+        "bytes": 13
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/datasets/f52ae371-5d2f-4a61-84b6-f2c733333543/manifest.json",
+        "sha256": "ac26c516286e67a525a83f4af9896785deba09ee630f20f6cc27372292a286aa",
+        "bytes": 683
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/experiments/f61c0c55-25cf-41fd-a3c1-65a9bf740999/workspace/experiment.py",
+        "sha256": "063c256ed8f69faf1abef69a8c683f59474963607badf822dbe983af33c07969",
+        "bytes": 581
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/run-records/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd.json",
+        "sha256": "d24f3eda2ce19960e9dce15875dceb5a4a22d631e6a301b7afe66105b747cf7c",
+        "bytes": 542
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/outputs/metrics.json",
+        "sha256": "1c7c40e8cc69ff05ba6c0d421ca89532852d3433356bdf2c2743f51971437cb2",
+        "bytes": 140
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/outputs/observations.json",
+        "sha256": "7048cb3988548a01703b70b343991480769a31ca831e6f1ac95195e8cf7dc358",
+        "bytes": 37
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/run.json",
+        "sha256": "46974aefbcdba778b1a02188f21c7625139cb7a31b443dc48652e1f269942ff4",
+        "bytes": 1128
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/snapshot/code/experiment.py",
+        "sha256": "063c256ed8f69faf1abef69a8c683f59474963607badf822dbe983af33c07969",
+        "bytes": 581
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/snapshot/config.json",
+        "sha256": "e9978782cb6d0f3264ea8216da3d244f118698d51710cd5adf7bcebfb7ff7201",
+        "bytes": 42
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/snapshot/inputs/f52ae371-5d2f-4a61-84b6-f2c733333543/samples.json",
+        "sha256": "faac8a0414a69ab286a6294635640fde5a1361b071f6b1cc06a6086c45c12e3e",
+        "bytes": 13
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/snapshot/manifest.json",
+        "sha256": "127ae82768e30fc37a7d20494134a360aeac0004cc743663b8f4315732a9ef68",
+        "bytes": 1858
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/snapshot/protocol.md",
+        "sha256": "7c57e9119970d1ffa33b59bb2246742c822f5adbf91f49e54602cd2f4daf0877",
+        "bytes": 115
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/stdout.log",
+        "sha256": "e7893dc6453521f74782317265fdbd29f1383cfd0e0f560382cb724d90b3c5f0",
+        "bytes": 48
+      },
+      {
+        "path": "labs/2541670e-576f-4a0e-a2a7-b9665fcd55f9/runs/1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd/worker.claim",
+        "sha256": "e439c7e0878dbd017903b84ba972b0e7cfe7d5d0bd35d60c0e8f4d9f83465a99",
+        "bytes": 51
+      },
+      {
+        "path": "pico.sqlite",
+        "sha256": "2c936a4308788b997add40260932fb5d58c2c0b4c27695374d7cee9fa9b700bd",
+        "bytes": 81920
+      }
+    ]
+  },
+  "writerSources": {
+    "src/web/Settings.tsx": "25a10816030ea6920c9d2f69d07f049bbc35e8ea7e4c850de461764d149db17b",
+    "src/web/routes.ts": "b780cfca6adea21f329816dcf3039f5a84159c0a575b9ac45135b181de74d6fd",
+    "src/web/App.tsx": "c08092dc1a705fb44585f25f20408cd4f1da88a2cf5c6eae73fbbde27b1ceb3b",
+    "src/web/main.tsx": "6297757869969e9b384e191aff5001d9e81387142258b56ddc16ff25d6257b6b",
+    "src/web/styles.css": "7742f6c9cb7f2c825b4d55b6980eb5bbf6afb489adf8e0082af0dcb3aafef550",
+    "src/web/Markdown.tsx": "4d147b7d353eb3aa53424d9615a6b527fb756cd6a6aef8775da17b01599741ae",
+    "src/web/primitives.tsx": "07216d4b892a5dd18190eed2349b65c054398ad821a78e8d8dcf6bc63ae9daa0",
+    "src/web/Library.tsx": "d128b064cf86fbd3524bfb30356b4485e6407bd5e303b2550c6dbfd2ad6e7b9b",
+    "src/web/api.ts": "5504fd4b2f1acd2e89a7613d3cbc54c3429c8517db0f67a0abf3c9dd51c33a57",
+    "src/web/Overview.tsx": "b112f7a881744a7e2c1ef311d584c8b4f09fe4a1caafcc47d239f047939c0f48",
+    "src/web/experiment-model.ts": "9b77a5ddcdb0eb3872f685445d98af921c05a5111e6d22c7696cba6c494cd93c",
+    "src/web/Experiments.tsx": "3949d81df50b93ab18869ebc1100fc9201d21ac6b7bfa0a0fcc5afe27ca90179",
+    "src/web/format.ts": "bcdf12345d4db3226e4e92a6208b70f9536788963b507af550b09b6b1f456f94",
+    "src/web/Chat.tsx": "951525831bbc67cd940311312eea1214e7b113ab3745aa6fa90f8f9e8047211b",
+    "src/server/main.ts": "bec41e7a9e2f4a14557467a7dc67ce58c951de2f8d7b4b8916d7a6126a2eb909",
+    "src/server/runner/archive.ts": "9dbf8f87f87461476639e5a9fe7398edd4a2193d4d4796228dd9fb34a3a77e5a",
+    "src/server/runner/engine.ts": "6b993e2e75e2e08cbaf3ff0aebbf157c225b405dafaa0e8f1a509c68542d2cbe",
+    "src/server/runner/types.ts": "0a1e38cb667d3d0549ab31a36668216c3064ec590616d1ac5ec26664fab0850a",
+    "src/server/runner/index.ts": "7e74c8991276ea6285feb40e505dcb3838679c9ab9a586680704d5f891590978",
+    "src/server/runner/files.ts": "34caa179ed7c6656ab7cf713dfed441ed6a9f08b17ad61289696cd1cfdf1378c",
+    "src/server/runner/worker.ts": "3af4cfcf578bf6e3a594ac4b7d7bc38f2e6e8de609617e35ea1309d3b40d4680",
+    "src/server/lab/validation.ts": "47bc8fa30315b0a00a4e1a05707fb32ddc2f61c84fb3804a04afec57647aa78a",
+    "src/server/lab/literature.ts": "09b9f109e1f8b423f0de3342bf0f6981c819ce997b6c33b27af594daa73f24af",
+    "src/server/lab/operations.ts": "57bd60300b03143d9eda0b772943c87ea74aa0da61f3f55861b15793f3898a40",
+    "src/server/lab/service.ts": "9472dd1bfd45549290faa00976068b8502656bc77875181d967c870d1578c92a",
+    "src/server/pico/demo.ts": "71ea2bce7a7b33da0f8e6dd31311754e053a34a6ab2231e3955f657559b903bf",
+    "src/server/pico/pi-adapter.ts": "554cd06483cb6088e9909f6a6d5645ef28677f4c9dc5b3569f69a48e5bb1ab84",
+    "src/server/pico/context.ts": "50b04d445fd779925b50648ce1bbb1d4663079d70faf2537d7bd61bdaedfdfcb",
+    "src/server/pico/pi-runtime.ts": "d087235c7453f89d7da06e09540435e88a62c90e130ad74219c05e2bdd4adad8",
+    "src/server/pico/session.ts": "01e9f9c52ea6bb15e5a4098144609b1d0030243fe50ef056c9655e0bd6c325b4",
+    "src/server/pico/profile.ts": "2c20307efafcabf53ac9828c3bc4ee26c1aba5b9167121fe656be8b797eb9e37",
+    "src/server/pico/tools.ts": "bad07c7b536b4295bf13e9115f01f85f6026fe4190e8d166a979196ab8d7a039",
+    "src/server/pico/web-pdf.ts": "245f0cbaaec210559ff6cba8b2bc9e2957648f3cf88390db1c57eea78ba1c7e9",
+    "src/server/pico/web-contract.ts": "b2301013a80fccea738cdb18636985fa78f4c97a3d10c63247d161192496adc9",
+    "src/server/pico/web-worker.ts": "7d96d1627431e3556f44fa15ed740c1df77f6d5831ef6b9c0b3f89686bfed1b1",
+    "src/server/pico/provider.ts": "030bb66f895149edb37626add77890ad9e743d72bf4fc7c09ba4c6cf05e9581e",
+    "src/server/pico/web-access.ts": "bf280a8079db091fb2e7994f11117613042294c8f7481f15af91b1886496f396",
+    "src/server/api.ts": "a9011d607fba19b26a014639aa7ddb63e02df9ce231fef10e9715514f6eb7c40",
+    "src/server/application.ts": "382452b060760049b90aea898c233ab48ce49375ed75392878f277a750d76c79",
+    "src/server/storage/migrations.ts": "bbdc35f889d7553f2e77f3cabe7705684a195bb5366d7201365aa10dd9673e86",
+    "src/server/storage/application-lock.ts": "cfad132aa0440300a71ace294c79fb6f6f8c333928c80a78dae58783e98b9ed3",
+    "src/server/storage/store.ts": "6ade2505cba4ebb4cff8f4ac0af1eb8a86b5b3a5d9ea6fd967a969d53e999c6a",
+    "src/shared/contracts.ts": "5c6c0985f642fde6fedd959dc5c72966bd01a5f95a815a6d9815313f3d993793"
+  },
+  "generatorSha256": "747bef974e05c2aaf9f17730c0d86a84eadc60bae8c044a04a6f435a5f81e3cd"
+}

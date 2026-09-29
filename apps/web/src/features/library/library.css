@@ -1,0 +1,22 @@
+.resource-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.resource-title .pico-mark {
+  width: 24px;
+  height: 24px;
+  font:
+    11px ui-monospace,
+    monospace;
+  background: var(--soft);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.paper-text {
+  max-height: 540px;
+  overflow: auto;
+  background: var(--tint);
+  border-radius: 5px;
+  padding: 18px;
+}

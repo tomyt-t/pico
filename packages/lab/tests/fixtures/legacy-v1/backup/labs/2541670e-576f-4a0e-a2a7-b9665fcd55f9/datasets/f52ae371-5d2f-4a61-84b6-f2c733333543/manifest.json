@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+  "id": "f52ae371-5d2f-4a61-84b6-f2c733333543",
+  "name": "Synthetic fixed samples",
+  "source": "Hand-authored compatibility fixture",
+  "license": "CC0",
+  "createdAt": "2026-09-29T01:13:44.125Z",
+  "files": [
+    {
+      "path": "samples.json",
+      "bytes": 13,
+      "sha256": "faac8a0414a69ab286a6294635640fde5a1361b071f6b1cc06a6086c45c12e3e"
+    }
+  ],
+  "sha256": "4d817c1e083ca229adb8affa7aecc516d0ed31abc05641dcf5ae21be4533a381",
+  "version": "legacy-v1",
+  "description": "Four authored numbers, no external data",
+  "splits": {
+    "fixture": 4
+  },
+  "author": {
+    "kind": "researcher"
+  }
+}

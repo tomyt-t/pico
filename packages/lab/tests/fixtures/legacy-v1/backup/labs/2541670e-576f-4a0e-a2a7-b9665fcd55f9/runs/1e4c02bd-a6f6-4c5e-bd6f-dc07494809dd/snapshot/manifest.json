@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-29T01:13:44.139Z",
+  "request": {
+    "runId": "1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd",
+    "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+    "experimentId": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+    "protocol": "Read the immutable synthetic dataset, calculate arithmetic mean, write metrics and observations. No network access.",
+    "experimentRevision": 1,
+    "criteria": [],
+    "config": {
+      "fixture": "legacy-v1",
+      "seed": 0
+    },
+    "datasetIds": [
+      "f52ae371-5d2f-4a61-84b6-f2c733333543"
+    ],
+    "entrypoint": "experiment.py",
+    "args": [],
+    "timeoutMs": 20000,
+    "runtime": "python"
+  },
+  "code": [
+    {
+      "path": "experiment.py",
+      "bytes": 581,
+      "sha256": "063c256ed8f69faf1abef69a8c683f59474963607badf822dbe983af33c07969"
+    }
+  ],
+  "datasets": [
+    {
+      "schemaVersion": 1,
+      "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+      "id": "f52ae371-5d2f-4a61-84b6-f2c733333543",
+      "name": "Synthetic fixed samples",
+      "source": "Hand-authored compatibility fixture",
+      "license": "CC0",
+      "createdAt": "2026-09-29T01:13:44.125Z",
+      "files": [
+        {
+          "path": "samples.json",
+          "bytes": 13,
+          "sha256": "faac8a0414a69ab286a6294635640fde5a1361b071f6b1cc06a6086c45c12e3e"
+        }
+      ],
+      "sha256": "4d817c1e083ca229adb8affa7aecc516d0ed31abc05641dcf5ae21be4533a381",
+      "version": "legacy-v1",
+      "description": "Four authored numbers, no external data",
+      "splits": {
+        "fixture": 4
+      },
+      "author": {
+        "kind": "researcher"
+      }
+    }
+  ],
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "runtime": "python",
+    "runtimeVersion": "Python 3.9.6"
+  },
+  "sha256": "dcd30d287ed84a50061b824673c5301fd44f2d6c5daf5cf835a608c76b642ec2"
+}

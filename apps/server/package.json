@@ -1,0 +1,12 @@
+{
+  "name": "@pico/server",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/server.ts"
+  },
+  "dependencies": {
+    "@pico/lab": "workspace:*",
+    "zod": "4.1.12"
+  }
+}

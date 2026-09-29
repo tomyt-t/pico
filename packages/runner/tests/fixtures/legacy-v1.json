@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "record": {
+    "schemaVersion": 1,
+    "id": "1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd",
+    "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+    "experimentId": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+    "status": "succeeded",
+    "createdAt": "2026-09-29T01:13:44.139Z",
+    "snapshotHash": "dcd30d287ed84a50061b824673c5301fd44f2d6c5daf5cf835a608c76b642ec2",
+    "metrics": [
+      {
+        "name": "mean",
+        "value": 2.5,
+        "unit": "score",
+        "split": "fixture"
+      },
+      {
+        "name": "count",
+        "value": 4,
+        "unit": "examples",
+        "split": "fixture"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "metrics.json",
+        "bytes": 140,
+        "sha256": "1c7c40e8cc69ff05ba6c0d421ca89532852d3433356bdf2c2743f51971437cb2"
+      },
+      {
+        "path": "observations.json",
+        "bytes": 37,
+        "sha256": "7048cb3988548a01703b70b343991480769a31ca831e6f1ac95195e8cf7dc358"
+      }
+    ],
+    "command": [
+      "python3",
+      "experiment.py"
+    ],
+    "startedAt": "2026-09-29T01:13:44.186Z",
+    "heartbeatAt": "2026-09-29T01:13:44.186Z",
+    "workerPid": 7429,
+    "endedAt": "2026-09-29T01:13:44.214Z",
+    "exitCode": 0,
+    "logsTruncated": false
+  },
+  "snapshot": {
+    "schemaVersion": 1,
+    "createdAt": "2026-09-29T01:13:44.139Z",
+    "request": {
+      "runId": "1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd",
+      "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+      "experimentId": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+      "protocol": "Read the immutable synthetic dataset, calculate arithmetic mean, write metrics and observations. No network access.",
+      "experimentRevision": 1,
+      "criteria": [],
+      "config": {
+        "fixture": "legacy-v1",
+        "seed": 0
+      },
+      "datasetIds": [
+        "f52ae371-5d2f-4a61-84b6-f2c733333543"
+      ],
+      "entrypoint": "experiment.py",
+      "args": [],
+      "timeoutMs": 20000,
+      "runtime": "python"
+    },
+    "code": [
+      {
+        "path": "experiment.py",
+        "bytes": 581,
+        "sha256": "063c256ed8f69faf1abef69a8c683f59474963607badf822dbe983af33c07969"
+      }
+    ],
+    "datasets": [
+      {
+        "schemaVersion": 1,
+        "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+        "id": "f52ae371-5d2f-4a61-84b6-f2c733333543",
+        "name": "Synthetic fixed samples",
+        "source": "Hand-authored compatibility fixture",
+        "license": "CC0",
+        "createdAt": "2026-09-29T01:13:44.125Z",
+        "files": [
+          {
+            "path": "samples.json",
+            "bytes": 13,
+            "sha256": "faac8a0414a69ab286a6294635640fde5a1361b071f6b1cc06a6086c45c12e3e"
+          }
+        ],
+        "sha256": "4d817c1e083ca229adb8affa7aecc516d0ed31abc05641dcf5ae21be4533a381",
+        "version": "legacy-v1",
+        "description": "Four authored numbers, no external data",
+        "splits": {
+          "fixture": 4
+        },
+        "author": {
+          "kind": "researcher"
+        }
+      }
+    ],
+    "environment": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "runtime": "python",
+      "runtimeVersion": "Python 3.9.6"
+    },
+    "sha256": "dcd30d287ed84a50061b824673c5301fd44f2d6c5daf5cf835a608c76b642ec2"
+  },
+  "files": [
+    {
+      "path": "snapshot/code/experiment.py",
+      "content": "aW1wb3J0IGpzb24sIG9zCmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aApzb3VyY2UgPSBuZXh0KFBhdGgob3MuZW52aXJvblsnUElDT19JTlBVVFNfRElSJ10pLmdsb2IoJyovc2FtcGxlcy5qc29uJykpCnZhbHVlcyA9IGpzb24ubG9hZHMoc291cmNlLnJlYWRfdGV4dCgpKQptZWFuID0gc3VtKHZhbHVlcykgLyBsZW4odmFsdWVzKQpvdXRwdXRzID0gUGF0aChvcy5lbnZpcm9uWydQSUNPX09VVFBVVF9ESVInXSkKKG91dHB1dHMgLyAnbWV0cmljcy5qc29uJykud3JpdGVfdGV4dChqc29uLmR1bXBzKFt7J25hbWUnOidtZWFuJywndmFsdWUnOm1lYW4sJ3VuaXQnOidzY29yZScsJ3NwbGl0JzonZml4dHVyZSd9LHsnbmFtZSc6J2NvdW50JywndmFsdWUnOmxlbih2YWx1ZXMpLCd1bml0JzonZXhhbXBsZXMnLCdzcGxpdCc6J2ZpeHR1cmUnfV0pKQoob3V0cHV0cyAvICdvYnNlcnZhdGlvbnMuanNvbicpLndyaXRlX3RleHQoanNvbi5kdW1wcyh7J3ZhbHVlcyc6dmFsdWVzLCdtZWFuJzptZWFufSkpCnByaW50KGYnTGVnYWN5IGZpeHR1cmUgbWVhc3VyZWQgbWVhbj17bWVhbn0gZnJvbSB7bGVuKHZhbHVlcyl9IHNhbXBsZXMnKQo=",
+      "encoding": "base64"
+    },
+    {
+      "path": "snapshot/inputs/f52ae371-5d2f-4a61-84b6-f2c733333543/samples.json",
+      "content": "WzEsIDIsIDMsIDRdCg==",
+      "encoding": "base64"
+    },
+    {
+      "path": "outputs/metrics.json",
+      "content": "W3sibmFtZSI6ICJtZWFuIiwgInZhbHVlIjogMi41LCAidW5pdCI6ICJzY29yZSIsICJzcGxpdCI6ICJmaXh0dXJlIn0sIHsibmFtZSI6ICJjb3VudCIsICJ2YWx1ZSI6IDQsICJ1bml0IjogImV4YW1wbGVzIiwgInNwbGl0IjogImZpeHR1cmUifV0=",
+      "encoding": "base64"
+    },
+    {
+      "path": "outputs/observations.json",
+      "content": "eyJ2YWx1ZXMiOiBbMSwgMiwgMywgNF0sICJtZWFuIjogMi41fQ==",
+      "encoding": "base64"
+    },
+    {
+      "path": "stdout.log",
+      "content": "TGVnYWN5IGZpeHR1cmUgbWVhc3VyZWQgbWVhbj0yLjUgZnJvbSA0IHNhbXBsZXMK",
+      "encoding": "base64"
+    },
+    {
+      "path": "stderr.log",
+      "content": "",
+      "encoding": "base64"
+    }
+  ]
+}

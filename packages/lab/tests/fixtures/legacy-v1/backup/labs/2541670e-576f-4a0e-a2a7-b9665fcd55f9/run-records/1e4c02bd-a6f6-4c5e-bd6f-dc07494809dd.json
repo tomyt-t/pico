@@ -1,0 +1,23 @@
+{
+  "id": "1e4c02bd-a6f6-4c5e-bd6f-dc07494809dd",
+  "labId": "2541670e-576f-4a0e-a2a7-b9665fcd55f9",
+  "author": {
+    "kind": "researcher"
+  },
+  "revision": 1,
+  "createdAt": "2026-09-29T01:13:44.128Z",
+  "updatedAt": "2026-09-29T01:13:44.128Z",
+  "experimentId": "f61c0c55-25cf-41fd-a3c1-65a9bf740999",
+  "attempt": 1,
+  "referenceRunId": null,
+  "status": "queued",
+  "target": "local",
+  "command": "",
+  "startedAt": null,
+  "endedAt": null,
+  "exitCode": null,
+  "error": null,
+  "metrics": [],
+  "artifacts": [],
+  "snapshot": null
+}

@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "paths": {
+      "@/lab/*": ["./packages/lab/src/*"],
+      "@/runner/*": ["./packages/runner/src/*"],
+      "@/server/*": ["./apps/server/src/*"],
+      "@/web/*": ["./apps/web/src/*"]
+    }
+  }
+}
