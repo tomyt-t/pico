@@ -3,7 +3,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "types": ["vite/client"],
-    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+    "lib": ["ES2022", "ESNext.Disposable", "DOM", "DOM.Iterable"]
   },
   "include": ["src", "vite.config.ts"]
 }

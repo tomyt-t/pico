@@ -28,7 +28,10 @@ export function verifySnapshot(snapshot: SnapshotManifest): SnapshotManifest {
     );
   return snapshot;
 }
-export function validateRequest(request: RunRequest): void {
+export function validateRequest(
+  request: RunRequest,
+  validateHost = true,
+): void {
   safeId(request.runId);
   safeId(request.labId);
   safeId(request.experimentId);
@@ -65,6 +68,34 @@ export function validateRequest(request: RunRequest): void {
     throw new RunnerError("Duplicate dataset versions");
   for (const id of request.datasetIds ?? []) safeId(id);
   if (request.referenceRunId) safeId(request.referenceRunId);
+  const resources = request.resources;
+  if (
+    resources?.memoryMiB !== undefined &&
+    (!Number.isSafeInteger(resources.memoryMiB) ||
+      resources.memoryMiB < 64 ||
+      resources.memoryMiB > 1_048_576)
+  )
+    throw new RunnerError("Memory limit must be between 64 and 1048576 MiB");
+  if (
+    resources?.gpuDevices !== undefined &&
+    (!Array.isArray(resources.gpuDevices) ||
+      resources.gpuDevices.length > 16 ||
+      resources.gpuDevices.some(
+        (id) => typeof id !== "string" || !/^\d+$/.test(id),
+      ) ||
+      new Set(resources.gpuDevices).size !== resources.gpuDevices.length)
+  )
+    throw new RunnerError(
+      "GPU devices must be unique numeric CUDA device identifiers",
+    );
+  if (
+    validateHost &&
+    process.platform !== "linux" &&
+    (resources?.memoryMiB !== undefined || resources?.gpuDevices !== undefined)
+  )
+    throw new RunnerError(
+      "Memory address-space limits and CUDA device selection require the Linux backend",
+    );
   const config = JSON.stringify(request.config);
   if (config.length > 100_000)
     throw new RunnerError("Run configuration is too large");

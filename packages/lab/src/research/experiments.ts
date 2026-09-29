@@ -21,8 +21,10 @@ export function createExperiment(
   ctx: MutationContext,
 ): Experiment {
   return context.mutate(labId, "createExperiment", input, ctx, () => {
+    validateExecutionAccess(input, ctx);
     const fields = parse(experimentSchema, input);
     validateExperiment(context, labId, fields);
+    bindCriteria(context, labId, fields);
     return context.insert(labId, "experiment", {
       ...context.meta(labId, ctx.actor),
       ...fields,
@@ -43,12 +45,15 @@ export function reviseExperiment(
     { id, patch, reason },
     ctx,
     () => {
+      validateExecutionAccess(patch, ctx);
       const current = context.getRecord<Experiment>(labId, "experiment", id);
       const fields = parse(experimentSchema, {
         ...scientificFields(current),
         ...patch,
       });
       validateExperiment(context, labId, fields);
+      // Only explicit criteria registration may bind a new hypothesis revision.
+      if (patch.criteria !== undefined) bindCriteria(context, labId, fields);
       const hasRuns = context.repo
         .list<Run>("run", labId)
         .some((run) => run.experimentId === id);
@@ -66,6 +71,30 @@ export function reviseExperiment(
       return context.revise("experiment", current, fields, ctx.actor, reason);
     },
   );
+}
+function validateExecutionAccess(
+  input: Partial<NewExperiment>,
+  ctx: MutationContext,
+): void {
+  if (input.executionAccess !== undefined && ctx.actor.kind !== "researcher")
+    throw new LabError(
+      "BAD_REQUEST",
+      "Only the researcher may change experiment credential access",
+    );
+}
+function bindCriteria(
+  context: ResearchContext,
+  labId: string,
+  fields: Pick<Experiment, "criteria">,
+): void {
+  fields.criteria = fields.criteria.map((criterion) => ({
+    ...criterion,
+    hypothesisRevision: context.getRecord<Hypothesis>(
+      labId,
+      "hypothesis",
+      criterion.hypothesisId,
+    ).revision,
+  }));
 }
 export function validateExperiment(
   context: ResearchContext,

@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { Experiment, LabOverview, Metric, Run } from "@pico/lab/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseRoute, routePath } from "@/web/app/navigation";
+import { number, statusLabel } from "@/web/components/format";
+import { setLanguage } from "@/web/components/i18n";
 import {
   compareMetrics,
   conditionsKey,
@@ -183,10 +185,36 @@ describe("question relationships", () => {
       />,
     );
     expect(html).toContain("#/labs/lab/experiments/exploratory-a");
-    expect(html).toContain("Exploratory");
+    expect(html).toContain("Exploratório");
     expect(html).not.toContain("Latency stays within a declared bound");
     expect(html).not.toContain("#/labs/lab/experiments/experiment-b");
-    expect(html).toContain("No conclusion recorded");
+    expect(html).toContain("Nenhuma conclusão registrada");
+  });
+});
+
+describe("interface language", () => {
+  test("switching language re-renders labels, statuses and numbers without changing records", () => {
+    const render = () =>
+      renderToStaticMarkup(
+        <Overview
+          overview={overview()}
+          questionId="question-a"
+          discuss={() => {}}
+        />,
+      );
+    try {
+      setLanguage("en");
+      expect(render()).toContain("No conclusion recorded");
+      expect(statusLabel("partially_answered")).toBe("Partially answered");
+      expect(number(1234.5)).toBe("1,234.5");
+      setLanguage("pt-BR");
+      expect(render()).toContain("Nenhuma conclusão registrada");
+      expect(statusLabel("partially_answered")).toBe("Parcialmente respondida");
+      expect(number(1234.5)).toBe("1.234,5");
+      expect(statusLabel("custom_state")).toBe("Custom state");
+    } finally {
+      setLanguage("pt-BR");
+    }
   });
 });
 

@@ -7,6 +7,7 @@ import type {
   Run,
   RunRequest,
 } from "@/lab/contracts";
+import { executionResourcesSchema } from "@/lab/contracts";
 import {
   createDatasetOperations,
   recoverDatasetPublication,
@@ -22,6 +23,7 @@ import type { SourceAccess } from "@/lab/sources/source-access";
 
 const runRequestSchema = z
   .object({
+    resources: executionResourcesSchema.optional(),
     args: z.array(z.string()).max(100).optional(),
     config: z.record(z.string(), z.json()).optional(),
     timeoutSeconds: z.number().int().positive().optional(),
@@ -32,6 +34,7 @@ export class ResearchOperations {
   readonly effects: EffectCoordinator;
   readonly workspace;
   readonly registerDataset;
+  readonly importDatasetDirectory;
   readonly readDatasetFile;
   readonly searchLiterature;
   readonly importPaper;
@@ -46,6 +49,7 @@ export class ResearchOperations {
     this.workspace = createWorkspace(lab, storage.files, this.effects);
     const datasets = createDatasetOperations(lab, storage, this.effects);
     this.registerDataset = datasets.registerDataset;
+    this.importDatasetDirectory = datasets.importDatasetDirectory;
     this.readDatasetFile = datasets.readDatasetFile;
     const papers = createSourceOperations(lab, sources);
     this.searchLiterature = papers.searchLiterature;
@@ -185,10 +189,16 @@ export class ResearchOperations {
   async reconcile(): Promise<void> {
     // Startup calls this while dispatch is gated; callbacks may redeliver the same observation.
     await this.runner.reconcile();
+    const inventory = await this.runner.runner.inventory();
     const runs = await this.runner.allRuns();
     for (const run of runs) this.acceptRun(run);
     for (const run of this.storage.research.activeRuns()) {
-      if (!runs.some((item) => item.id === run.id))
+      if (
+        !runs.some((item) => item.id === run.id) &&
+        !inventory.issues.some(
+          (issue) => issue.labId === run.labId && issue.runId === run.id,
+        )
+      )
         this.lab.updateRun(
           run.labId,
           run.id,
@@ -206,7 +216,9 @@ export class ResearchOperations {
       const recovered =
         effect.operation === "startRun"
           ? this.storage.research.get<Run>("run", effect.resourceId)
-          : effect.operation === "registerDatasetFiles"
+          : ["registerDatasetFiles", "importDatasetDirectory"].includes(
+                effect.operation,
+              )
             ? await recoverDatasetPublication(
                 this.lab,
                 this.storage,

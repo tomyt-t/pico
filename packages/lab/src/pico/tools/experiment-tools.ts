@@ -2,10 +2,12 @@ import { z } from "zod";
 import {
   type DatasetRegistration,
   type Experiment,
+  executionResourcesSchema,
   experimentSchema,
   patchSchema,
   type Run,
 } from "@/lab/contracts";
+import { jsonPage, pageFields, textPage } from "@/lab/pico/tools/output";
 import type { ToolScope } from "@/lab/pico/tools/tool-definition";
 
 const id = z.string().min(1);
@@ -43,19 +45,46 @@ export function registerExperimentTools({
   tool(
     "list_files",
     "List experiment workspace files.",
-    z.object({ experimentId: id }).strict(),
-    (input) => {
+    z.object({ experimentId: id, ...pageFields }).strict(),
+    async (input) => {
       research.getRecord<Experiment>(labId, "experiment", input.experimentId);
-      return research.listFiles(labId, input.experimentId);
+      return jsonPage(
+        await research.listFiles(labId, input.experimentId),
+        input.offset,
+        input.maxBytes,
+        input.fingerprint,
+      );
     },
   );
   tool(
     "read_file",
-    "Read a file in the experiment workspace.",
-    z.object({ experimentId: id, path: id }).strict(),
-    (input) => {
+    "Read a UTF-8 page in the experiment workspace; use nextOffset for continuation. Binary files return metadata only.",
+    z.object({ experimentId: id, path: id, ...pageFields }).strict(),
+    async (input) => {
       research.getRecord<Experiment>(labId, "experiment", input.experimentId);
-      return research.readFile(labId, input.experimentId, input.path);
+      const file = await research.readFile(
+        labId,
+        input.experimentId,
+        input.path,
+      );
+      return file.encoding === "base64"
+        ? {
+            path: file.path,
+            encoding: file.encoding,
+            bytes: Buffer.byteLength(file.content, "base64"),
+            detail:
+              "Binary file preserved; inspect or download through the experiment page.",
+          }
+        : {
+            path: file.path,
+            encoding: "utf8",
+            ...textPage(
+              file.content,
+              input.offset,
+              input.maxBytes,
+              input.fingerprint,
+            ),
+          };
     },
   );
   tool(
@@ -120,6 +149,7 @@ export function registerExperimentTools({
         config: z.record(z.string(), z.json()).optional(),
         timeoutSeconds: z.number().int().positive().optional(),
         referenceRunId: id.optional(),
+        resources: executionResourcesSchema.optional(),
       })
       .strict(),
     ({ experimentId, ...request }, ctx) =>
@@ -128,22 +158,33 @@ export function registerExperimentTools({
   tool(
     "read_run",
     "Read run status, metrics, artifacts and reproduction snapshot. Do not repeatedly poll; completion is delivered automatically.",
-    z.object({ runId: id }).strict(),
-    (input) => research.getRecord<Run>(labId, "run", input.runId),
+    z.object({ runId: id, ...pageFields }).strict(),
+    (input) =>
+      jsonPage(
+        research.getRecord<Run>(labId, "run", input.runId),
+        input.offset,
+        input.maxBytes,
+        input.fingerprint,
+      ),
   );
   tool(
     "read_logs",
     "Inspect bounded stdout and stderr for a run.",
-    z.object({ runId: id }).strict(),
-    (input) => {
+    z.object({ runId: id, ...pageFields }).strict(),
+    async (input) => {
       research.getRecord<Run>(labId, "run", input.runId);
-      return research.readLogs(labId, input.runId);
+      return jsonPage(
+        await research.readLogs(labId, input.runId),
+        input.offset,
+        input.maxBytes,
+        input.fingerprint,
+      );
     },
   );
   tool(
     "read_artifact",
     "Read a UTF-8 output file, or get metadata for binary artifacts.",
-    z.object({ runId: id, path: id }).strict(),
+    z.object({ runId: id, path: id, ...pageFields }).strict(),
     async (input) => {
       const run = research.getRecord<Run>(labId, "run", input.runId);
       const metadata = run.artifacts.find((file) => file.path === input.path);
@@ -153,15 +194,23 @@ export function registerExperimentTools({
         "outputs",
         input.path,
       );
-      if (/\.(png|jpg|jpeg|gif|webp|pdf|bin|pt)$/i.test(input.path))
+      if (
+        bytes.includes(0) ||
+        Buffer.from(bytes.toString("utf8")).compare(bytes) !== 0 ||
+        /\.(png|jpg|jpeg|gif|webp|pdf|bin|pt)$/i.test(input.path)
+      )
         return {
           metadata,
           detail: "Binary artifact preserved; inspect via the experiment page.",
         };
       return {
         path: input.path,
-        content: bytes.subarray(0, 64_000).toString("utf8"),
-        clipped: bytes.length > 64_000,
+        ...textPage(
+          bytes.toString("utf8"),
+          input.offset,
+          input.maxBytes,
+          input.fingerprint,
+        ),
       };
     },
   );

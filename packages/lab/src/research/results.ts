@@ -1,5 +1,7 @@
 import type {
+  Conclusion,
   Experiment,
+  Hypothesis,
   MutationContext,
   NewResult,
   Result,
@@ -70,7 +72,7 @@ export function reviseResult(
           current.runIds,
           fields.evidence,
         );
-      return context.revise(
+      const revised = context.revise(
         "result",
         current,
         {
@@ -82,6 +84,26 @@ export function reviseResult(
         ctx.actor,
         reason,
       );
+      // All dependent flags and the corrected result commit with the same receipt.
+      // Preserve the original resultRevisions: this is a request for review, not
+      // a new scientific assessment made by the system.
+      for (const kind of ["hypothesis", "conclusion"] as const) {
+        for (const record of context.repo.list<Hypothesis | Conclusion>(
+          kind,
+          labId,
+        )) {
+          if (record.resultIds.includes(id) && !record.needsReview) {
+            context.revise(
+              kind,
+              record,
+              { needsReview: true },
+              { kind: "system" },
+              `Result ${id} changed from revision ${current.revision} to ${revised.revision}; review the recorded assessment`,
+            );
+          }
+        }
+      }
+      return revised;
     },
   );
 }

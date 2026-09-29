@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { i18n } from "@/web/components/i18n";
 
 export class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -14,13 +15,10 @@ export class ErrorBoundary extends Component<
   render() {
     return this.state.failed ? (
       <div className="error-boundary">
-        <h1>This view could not be displayed.</h1>
-        <p>
-          The laboratory's recorded work is kept on the server. Reload the
-          interface to reconnect.
-        </p>
+        <h1>{i18n.t("app.errorTitle")}</h1>
+        <p>{i18n.t("app.errorBody")}</p>
         <button type="button" onClick={() => window.location.reload()}>
-          Reload Pico
+          {i18n.t("app.reload")}
         </button>
       </div>
     ) : (

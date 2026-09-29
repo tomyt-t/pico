@@ -7,6 +7,7 @@ import {
 } from "@/web/app/laboratory-queries";
 import { navigate, useRoute } from "@/web/app/navigation";
 import { savedTheme } from "@/web/app/theme";
+import { useTranslation } from "@/web/components/i18n";
 import { Loading, Notice } from "@/web/components/primitives";
 import { useChatDrafts } from "@/web/features/chat/chat-drafts";
 import { Chat } from "@/web/features/chat/chat-page";
@@ -17,6 +18,7 @@ import { Setup } from "@/web/features/settings/laboratory-setup";
 import { Settings } from "@/web/features/settings/settings-dialog";
 
 export function App() {
+  const { t, i18n } = useTranslation();
   const labs = useLaboratories();
   const route = useRoute();
   const [theme, setTheme] = useState(savedTheme);
@@ -33,6 +35,9 @@ export function App() {
       localStorage.setItem("pico-theme", theme);
     } catch {}
   }, [theme]);
+  useEffect(() => {
+    document.documentElement.lang = i18n.language;
+  }, [i18n.language]);
   useEffect(() => {
     if (!route && labs.data?.[0])
       navigate({ labId: labs.data[0].id, page: "chat" });
@@ -52,19 +57,20 @@ export function App() {
     if (creating || updated.id !== labId)
       navigate({ labId: updated.id, page: "chat" });
   };
-  if (labs.loading && !labs.data) return <Loading>Connecting to Pico…</Loading>;
+  if (labs.loading && !labs.data)
+    return <Loading>{t("app.connecting")}</Loading>;
   if (labs.error && !labs.data)
     return (
       <div className="setup">
         <div className="setup-card">
-          <h1>Cannot connect to the laboratory</h1>
+          <h1>{t("app.cannotConnect")}</h1>
           <Notice error>{labs.error}</Notice>
           <button
             style={{ marginTop: 20 }}
             type="button"
             onClick={labs.refresh}
           >
-            Retry connection
+            {t("app.retryConnection")}
           </button>
         </div>
       </div>
@@ -87,11 +93,11 @@ export function App() {
           <Notice error>
             {status.error}{" "}
             <button type="button" onClick={status.refresh}>
-              Retry
+              {t("common.retry")}
             </button>
           </Notice>
         )}
-        {status.loading && <Loading>Loading laboratory…</Loading>}
+        {status.loading && <Loading>{t("common.loadingLaboratory")}</Loading>}
         {lab && page === "chat" && (
           <Chat
             key={labId}
@@ -134,15 +140,13 @@ export function App() {
         )}
         {!lab && !status.loading && (
           <div className="page">
-            <Notice error>
-              Select an existing laboratory or create a new one.
-            </Notice>
+            <Notice error>{t("app.selectOrCreate")}</Notice>
             <button
               type="button"
               style={{ marginTop: 15 }}
               onClick={() => setSettings("new")}
             >
-              Create laboratory
+              {t("app.createLaboratory")}
             </button>
           </div>
         )}

@@ -1,5 +1,6 @@
 import type { LabOverview, Run } from "@pico/lab/contracts";
-import { number } from "@/web/components/format";
+import { number, statusLabel } from "@/web/components/format";
+import { useTranslation } from "@/web/components/i18n";
 import {
   Code,
   Empty,
@@ -23,26 +24,32 @@ export function RunComparison({
   onSelection: (ids: string[]) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const runs = selected.flatMap((id) => {
     const run = overview.runs.find((row) => row.id === id);
     return run ? [run] : [];
   });
   const title = (run: Run) =>
-    `${overview.experiments.find((entry) => entry.id === run.experimentId)?.title ?? "Experiment"} · attempt ${run.attempt}`;
+    t("common.attemptOf", {
+      title:
+        overview.experiments.find((entry) => entry.id === run.experimentId)
+          ?.title ?? t("common.experiment"),
+      attempt: run.attempt,
+    });
   const rows = compareMetrics(runs);
   const varied = new Set(runs.map(conditionsKey)).size > 1;
   return (
     <div>
       <div className="section-heading">
-        <h2>Compare executions</h2>
+        <h2>{t("comparison.title")}</h2>
         <button className="small" type="button" onClick={onClose}>
-          Back to experiments
+          {t("comparison.back")}
         </button>
       </div>
       <div className="compare-grid">
         {selected.map((id, index) => (
           <label className="field" key={index === 0 ? "first" : "second"}>
-            Execution {index + 1}
+            {t("comparison.execution", { index: index + 1 })}
             <select
               name={`comparisonRun${index + 1}`}
               value={id}
@@ -62,7 +69,7 @@ export function RunComparison({
                     (value, at) => at !== index && value === run.id,
                   )}
                 >
-                  {title(run)} · {run.status}
+                  {title(run)} · {statusLabel(run.status)}
                 </option>
               ))}
             </select>
@@ -71,37 +78,25 @@ export function RunComparison({
       </div>
       {varied && (
         <div style={{ marginBottom: 20 }}>
-          <Notice>
-            Preserved conditions differ across these runs. Check code, datasets,
-            configuration and protocol before interpreting a difference.
-          </Notice>
+          <Notice>{t("comparison.conditionsDiffer")}</Notice>
         </div>
       )}
       {runs.some((run) => run.status !== "succeeded") && (
         <div style={{ marginBottom: 20 }}>
-          <Notice>
-            Some executions are incomplete or unsuccessful. Their available
-            metrics may be partial.
-          </Notice>
+          <Notice>{t("comparison.incomplete")}</Notice>
         </div>
       )}
       {runs.some((run) => !run.snapshot) && (
-        <Notice>
-          Some runs have no preserved snapshot; their conditions cannot be fully
-          compared.
-        </Notice>
+        <Notice>{t("comparison.noSnapshot")}</Notice>
       )}
-      <Section title="Measured values">
-        <p className="meta">
-          Rows match metric name, unit, split and step exactly. Missing or
-          ambiguous values remain blank.
-        </p>
+      <Section title={t("comparison.measured")}>
+        <p className="meta">{t("comparison.measuredHint")}</p>
         {rows.length ? (
           <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Metric / condition</th>
+                  <th>{t("comparison.metricCondition")}</th>
                   {runs.map((run) => (
                     <th key={run.id} className="num">
                       {title(run)}
@@ -118,8 +113,11 @@ export function RunComparison({
                     <td>
                       {row.name}
                       <div className="meta">
-                        {row.unit ?? "No unit"} · {row.split ?? "No split"} ·{" "}
-                        {row.step === null ? "No step" : `Step ${row.step}`}
+                        {row.unit ?? t("comparison.noUnit")} ·{" "}
+                        {row.split ?? t("comparison.noSplit")} ·{" "}
+                        {row.step === null
+                          ? t("comparison.noStep")
+                          : t("comparison.stepN", { step: row.step })}
                       </div>
                     </td>
                     {row.values.map((value, index) => (
@@ -133,8 +131,8 @@ export function RunComparison({
             </table>
           </div>
         ) : (
-          <Empty title="No comparable observations yet">
-            Metrics appear after executions produce them.
+          <Empty title={t("comparison.noComparable")}>
+            {t("comparison.noComparableBody")}
           </Empty>
         )}
       </Section>
@@ -143,33 +141,37 @@ export function RunComparison({
           <Section key={run.id} title={title(run)}>
             <dl className="details-grid">
               <div>
-                <dt>Code hash</dt>
-                <dd className="mono">{run.snapshot?.codeHash ?? "Unknown"}</dd>
-              </div>
-              <div>
-                <dt>Entrypoint</dt>
+                <dt>{t("comparison.codeHash")}</dt>
                 <dd className="mono">
-                  {run.snapshot?.entrypoint ?? "Unknown"}
+                  {run.snapshot?.codeHash ?? t("comparison.unknown")}
                 </dd>
               </div>
               <div>
-                <dt>Dataset versions</dt>
+                <dt>{t("comparison.entrypoint")}</dt>
+                <dd className="mono">
+                  {run.snapshot?.entrypoint ?? t("comparison.unknown")}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("comparison.datasetVersions")}</dt>
                 <dd>
                   {run.snapshot?.datasetInputs
                     .map((input) => `${input.name} ${input.version}`)
-                    .join(", ") || "None recorded"}
+                    .join(", ") || t("comparison.noneRecorded")}
                 </dd>
               </div>
               <div>
-                <dt>Configuration</dt>
+                <dt>{t("comparison.configuration")}</dt>
                 <dd className="mono">
                   {JSON.stringify(run.snapshot?.config ?? null)}
                 </dd>
               </div>
             </dl>
             <details style={{ marginTop: 15 }}>
-              <summary>All preserved conditions</summary>
-              <Code>{JSON.stringify(run.snapshot, null, 2)}</Code>
+              <summary>{t("comparison.allConditions")}</summary>
+              <Code language="json">
+                {JSON.stringify(run.snapshot, null, 2)}
+              </Code>
             </details>
           </Section>
         ))}

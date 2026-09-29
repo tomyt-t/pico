@@ -9,7 +9,7 @@ anterior. O nome do produto continua sendo **Pico**.
 ## Estado atual
 
 Baseline implementada com uma conversa persistente por laboratório, tools,
-SQLite, executor Python/uv e quatro páginas: Chat, Overview, Experiments e Library.
+SQLite, executor Python/uv e quatro páginas: Conversa, Visão geral, Experimentos e Biblioteca.
 O ciclo local completo é testado com narração simulada e execução Python real.
 Pico também conversa e opera as tools com provedores configurados em seu perfil
 Pi próprio. A extensão pi-web-access fornece busca e leitura de fontes.
@@ -24,6 +24,7 @@ demonstrou ganho da defesa.
 - [Uso, execução e reprodução](docs/usage.md)
 - [Contrato HTTP](docs/http-api.md)
 - [Validações e revisão adversarial](docs/validation.md)
+- [Estabilização de 29/09/2026: correções e validação GLM 5.3](docs/stabilization-2026-09.md)
 
 ## Executar
 
@@ -92,7 +93,7 @@ Quatro workspaces privados compartilham o lockfile e os comandos da raiz:
 ```text
 apps/
   server/              HTTP, assets e lifecycle do processo
-  web/                 React: Chat, Overview, Experiments e Library
+  web/                 React: Conversa, Visão geral, Experimentos e Biblioteca
 packages/
   lab/                 Pesquisa, conversa, modelos, fontes e persistência
     src/contracts.ts   API de tipos/schemas: @pico/lab/contracts

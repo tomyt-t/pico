@@ -1,5 +1,15 @@
 # Validação do Pico
 
+## Estabilização de 29/09/2026
+
+Aceite integrado: **248 testes, 1.521 assertions, zero falhas**, TypeScript,
+lint e build aprovados; teste exclusivo de Linux executado separadamente. Houve
+execução real do runner em Linux sem ps, validação Chrome desktop/mobile e ciclo
+externo com GLM 5.3: 25 chamadas, US$ 0,61355624 reportados. Backup/restore
+preservou os 119 registros e 3 revisões do laboratório externo. As correções,
+rodadas adversariais e limitações estão no
+[relatório de estabilização](stabilization-2026-09.md).
+
 ## Escopo das evidências
 
 Os testes distinguem narração simulada, execução Python/uv real e chamadas a

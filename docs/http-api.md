@@ -15,6 +15,11 @@ the same intent. Shared types and schemas are exported by `@pico/lab/contracts`.
 | GET /labs/:labId/status | — | `LabStatus`: lab and active turn |
 | GET /labs/:labId/overview | — | `LabOverview` |
 | GET /labs/:labId/conversation | — | `ConversationView` |
+| GET /labs/:labId/history?before=messageId&limit=100 | optional cursor and limit 1–200 | `Message[]`, chronological page before the cursor |
+| GET /labs/:labId/record-index | — | `RecordReference[]` for navigation |
+| GET /labs/:labId/execution | — | `ExecutionStatus`, local capabilities, diagnostic issues and other blocked labs |
+| POST /labs/:labId/execution/:runId/repair | `{}` | verified operational state; refuses uncertain live processes |
+| POST /labs/:labId/execution/:runId/cleanup | `{}` | `{removed:boolean}`; removes only disposable work after verified termination |
 | POST /labs/:labId/chat | `{message:string}` | `Turn` (202; continues on server) |
 | POST /labs/:labId/turns/:turnId/stop | `{}` | `Turn` |
 | POST /labs/:labId/turns/:turnId/continue | `{}` | `Turn` |
@@ -49,7 +54,10 @@ the same intent. Shared types and schemas are exported by `@pico/lab/contracts`.
 | GET /labs/:labId/records/:kind/:id/history | — | `Revision[]` |
 | POST /backup | `{destination:string}` local administrative operation | `{path:string}` |
 
-UI may poll overview/conversation every ~1.5s while visible. Keep drafts through
+GET JSON responses use ETag and private revalidation, returning 304 for unchanged
+data. UI polls while visible, backs off after errors and does not re-render unchanged
+responses. Server projections are still computed before conditional comparison.
+Keep drafts through
 navigation and show request errors. No record is inferred from an optimistic
 chat response. REST creation defaults to **demo**; the UI prefers an authenticated
 Pi default for new laboratories. Demo tools perform real, bounded local operations
@@ -73,7 +81,21 @@ must match the collected observation. An artifact reference contains
 `{kind:"artifact",runId,path,sha256}`. References must match terminal runs included
 in the result. Legacy records remain readable without fabricated references;
 adding evidence creates an authored revision. Supported/refuted hypothesis
-assessments require verified evidence and declared criteria.
+assessments require all cited runs to have succeeded, the assessed hypothesis
+revision and criteria to be preserved in the run snapshot, matching metric
+dimensions and numeric agreement with the criterion. Conflicting outcomes require
+an inconclusive assessment. Result revisions mark dependent assessments
+`needsReview`, retaining the historical `resultRevisions` used.
+
+Experiment `executionAccess.piProfile` can be changed only by a researcher.
+The runner resolves that permission at dispatch and does not inherit the server
+environment. This is a trusted local execution policy, not an OS sandbox.
+`RunRequest.resources` accepts `memoryMiB` and `gpuDevices`; capabilities specify
+which controls the host supports. Reproductions preserve these resources.
+
+Production document responses carry CSP restricting scripts and connections to
+the same origin, plus `Referrer-Policy: no-referrer`. Markdown remote images are
+explicit links; they never trigger an automatic image request.
 
 During backup or shutdown, new requests receive 503 `UNAVAILABLE`; a concurrent
 backup receives 409 `CONFLICT`. Already admitted requests drain before resources

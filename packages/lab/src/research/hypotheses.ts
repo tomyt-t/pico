@@ -7,7 +7,11 @@ import type {
 } from "@/lab/contracts";
 import { hypothesisSchema } from "@/lab/contracts";
 import { LabError, parse } from "@/lab/research/errors";
-import { validateEvidenceForQuestion } from "@/lab/research/evidence";
+import {
+  resultRevisions,
+  validateEvidenceForQuestion,
+  validateHypothesisTest,
+} from "@/lab/research/evidence";
 import {
   type ResearchContext,
   scientificFields,
@@ -24,6 +28,8 @@ export function createHypothesis(
     return context.insert(labId, "hypothesis", {
       ...context.meta(labId, ctx.actor),
       ...fields,
+      resultRevisions: resultRevisions(context, labId, fields.resultIds),
+      needsReview: false,
     });
   });
 }
@@ -42,8 +48,13 @@ export function reviseHypothesis(
     ctx,
     () => {
       const current = context.getRecord<Hypothesis>(labId, "hypothesis", id);
+      const {
+        resultRevisions: _basis,
+        needsReview: _review,
+        ...editable
+      } = scientificFields(current);
       const fields = parse(hypothesisSchema, {
-        ...scientificFields(current),
+        ...editable,
         ...patch,
       });
       if (fields.questionId !== current.questionId)
@@ -51,8 +62,36 @@ export function reviseHypothesis(
           "BAD_REQUEST",
           "Create a new hypothesis to investigate a different question",
         );
-      validateHypothesis(context, labId, fields);
-      return context.revise("hypothesis", current, fields, ctx.actor, reason);
+      validateHypothesis(context, labId, fields, id);
+      const claimChanged =
+        fields.statement !== current.statement ||
+        fields.rationale !== current.rationale;
+      const reassessed =
+        patch.assessment !== undefined ||
+        (!claimChanged &&
+          (patch.resultIds !== undefined || patch.status !== undefined));
+      return context.revise(
+        "hypothesis",
+        current,
+        {
+          ...fields,
+          ...(reassessed
+            ? {
+                resultRevisions: resultRevisions(
+                  context,
+                  labId,
+                  fields.resultIds,
+                ),
+                needsReview: false,
+              }
+            : {}),
+          ...(claimChanged && current.assessment.trim() && !reassessed
+            ? { needsReview: true }
+            : {}),
+        },
+        ctx.actor,
+        reason,
+      );
     },
   );
 }
@@ -60,6 +99,7 @@ export function validateHypothesis(
   context: ResearchContext,
   labId: string,
   fields: Omit<Hypothesis, keyof RecordMeta>,
+  currentId?: string,
 ): void {
   context.getRecord<Question>(labId, "question", fields.questionId);
   for (const resultId of fields.resultIds)
@@ -73,19 +113,12 @@ export function validateHypothesis(
       "Hypothesis assessments require an explanation and recorded evidence",
     );
   }
-  if (
-    ["supported", "refuted"].includes(fields.status) &&
-    !fields.resultIds.some((id) => {
-      const result = context.getRecord<import("@/lab/contracts").Result>(
-        labId,
-        "result",
-        id,
+  if (["supported", "refuted"].includes(fields.status)) {
+    if (!currentId)
+      throw new LabError(
+        "BAD_REQUEST",
+        "Register a hypothesis and its criteria before execution; a newly created hypothesis cannot already be supported or refuted",
       );
-      return result.evidenceVersion === 1 && Boolean(result.evidence?.length);
-    })
-  )
-    throw new LabError(
-      "BAD_REQUEST",
-      "Supported or refuted hypotheses require structured references to collected observations",
-    );
+    validateHypothesisTest(context, labId, { ...fields, id: currentId });
+  }
 }

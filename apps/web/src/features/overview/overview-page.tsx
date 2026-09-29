@@ -1,6 +1,7 @@
 import type { LabOverview } from "@pico/lab/contracts";
 import { routePath } from "@/web/app/navigation";
-import { timestamp } from "@/web/components/format";
+import { author, statusLabel, timestamp } from "@/web/components/format";
+import { useTranslation } from "@/web/components/i18n";
 import {
   Empty,
   Icon,
@@ -9,10 +10,13 @@ import {
   Status,
 } from "@/web/components/primitives";
 import { QueryState } from "@/web/components/query-state";
+import { IdText } from "@/web/components/record-text";
 import { ConclusionRecord } from "@/web/features/overview/conclusion-detail";
+import { ExecutionHealth } from "@/web/features/overview/execution-health";
 import { useOverviewOverview } from "@/web/features/overview/overview-queries";
 import { QuestionRecord } from "@/web/features/overview/question-detail";
 import { questionRecords } from "@/web/features/overview/question-records";
+import { ResultLinks } from "@/web/features/overview/result-links";
 
 export function Overview({
   overview,
@@ -23,7 +27,11 @@ export function Overview({
   questionId?: string;
   discuss: (text: string) => void;
 }) {
+  const { t } = useTranslation();
   const { lab } = overview;
+  const needsReview = [...overview.hypotheses, ...overview.conclusions].filter(
+    (record) => record.needsReview,
+  );
   const activeRuns = overview.runs.filter((entry) =>
     ["queued", "running"].includes(entry.status),
   );
@@ -49,10 +57,10 @@ export function Overview({
             className="back"
             href={routePath({ labId: lab.id, page: "overview" })}
           >
-            ← Overview
+            {t("overview.back")}
           </a>
-          <Empty title="Question not found">
-            This question is not part of the selected laboratory.
+          <Empty title={t("overview.questionNotFound")}>
+            {t("overview.questionNotFoundBody")}
           </Empty>
         </div>
       );
@@ -63,10 +71,10 @@ export function Overview({
           className="back"
           href={routePath({ labId: lab.id, page: "overview" })}
         >
-          ← Overview
+          {t("overview.back")}
         </a>
         <PageHeading
-          eyebrow="Research question"
+          eyebrow={t("overview.researchQuestion")}
           title={question.text}
           action={
             <button
@@ -74,12 +82,15 @@ export function Overview({
               type="button"
               onClick={() =>
                 discuss(
-                  `Let's review question ${question.id}: ${question.text}. What do the recorded findings show, and what should we investigate next?`,
+                  t("overview.reviewQuestionPrompt", {
+                    id: question.id,
+                    text: question.text,
+                  }),
                 )
               }
             >
               <Icon name="chat" size={15} />
-              Discuss with Pico
+              {t("common.discussWithPico")}
             </button>
           }
         >
@@ -88,39 +99,58 @@ export function Overview({
         <div className="chip-row" style={{ marginBottom: 24 }}>
           <Status value={question.status} />
           <span className="meta">
-            Revision {question.revision} · Updated{" "}
-            {timestamp(question.updatedAt)}
+            {t("overview.revisionUpdated", {
+              revision: question.revision,
+              date: timestamp(question.updatedAt),
+            })}
           </span>
         </div>
         <div className="grid-main">
           <div className="stack">
-            <Section title="Hypotheses">
+            <Section title={t("overview.hypotheses")}>
               {records.hypotheses.length ? (
                 records.hypotheses.map((row) => (
-                  <article key={row.id} className="record">
+                  <article
+                    key={row.id}
+                    className="record"
+                    id={`hypothesis-${row.id}`}
+                  >
                     <div className="record-heading">
                       <h3>{row.statement}</h3>
                       <Status value={row.status} />
                     </div>
+                    {row.needsReview && (
+                      <span className="status status-paused">
+                        {t("common.needsReview")}
+                      </span>
+                    )}
                     <p>{row.rationale}</p>
                     {row.assessment && (
                       <p>
-                        <strong>Assessment:</strong> {row.assessment}
+                        <strong>{t("overview.assessment")}</strong>{" "}
+                        {row.assessment}
                       </p>
                     )}
                     <div className="record-meta">
-                      <span>Revision {row.revision}</span>
-                      <span>By {row.author.kind}</span>
+                      <span>
+                        {t("overview.revision", { revision: row.revision })}
+                      </span>
+                      <span>
+                        {t("common.by", { author: author(row.author.kind) })}
+                      </span>
+                    </div>
+                    <div className="link-list">
+                      <ResultLinks row={row} overview={overview} />
                     </div>
                   </article>
                 ))
               ) : (
-                <Empty title="No hypotheses recorded">
-                  Exploration can begin with this question and an experiment.
+                <Empty title={t("overview.noHypotheses")}>
+                  {t("overview.noHypothesesBody")}
                 </Empty>
               )}
             </Section>
-            <Section title="Experiments">
+            <Section title={t("overview.experiments")}>
               {records.experiments.length ? (
                 records.experiments.map((row) => (
                   <article className="record" key={row.id}>
@@ -142,35 +172,34 @@ export function Overview({
                     <div className="record-meta">
                       <span>
                         {row.hypothesisIds.length
-                          ? "Hypothesis test"
-                          : "Exploratory"}
+                          ? t("common.hypothesisTest")
+                          : t("common.exploratory")}
                       </span>
                       <span>
-                        {
-                          overview.runs.filter(
+                        {t("common.runs", {
+                          count: overview.runs.filter(
                             (run) => run.experimentId === row.id,
-                          ).length
-                        }{" "}
-                        runs
+                          ).length,
+                        })}
                       </span>
                     </div>
                   </article>
                 ))
               ) : (
-                <Empty title="No experiments yet">
-                  Plan the next investigation in the conversation.
+                <Empty title={t("overview.noExperiments")}>
+                  {t("overview.noExperimentsBody")}
                 </Empty>
               )}
             </Section>
           </div>
-          <Section title="What we have learned">
+          <Section title={t("overview.learned")}>
             {records.conclusions.length ? (
               records.conclusions.map((row) => (
                 <ConclusionRecord row={row} overview={overview} key={row.id} />
               ))
             ) : (
-              <Empty title="No conclusion recorded">
-                Conclusions will connect the findings to this question.
+              <Empty title={t("overview.noConclusion")}>
+                {t("overview.noConclusionBody")}
               </Empty>
             )}
           </Section>
@@ -180,35 +209,51 @@ export function Overview({
   }
   return (
     <div className="page">
+      <ExecutionHealth labId={lab.id} />
+      {!!overview.resumableTurns?.length && (
+        <div className="notice">
+          <span>{t("operations.resumable")}</span>{" "}
+          <a href={routePath({ labId: lab.id, page: "chat" })}>
+            {t("operations.resumeChat")}
+          </a>
+        </div>
+      )}
       <PageHeading
-        eyebrow="Laboratory overview"
-        title="The research, in view."
+        eyebrow={t("overview.eyebrow")}
+        title={t("overview.title")}
         action={
           <button
             className="primary"
             type="button"
-            onClick={() =>
-              discuss(
-                "Review the current laboratory records and help me choose the next useful research step.",
-              )
-            }
+            onClick={() => discuss(t("overview.discussPrompt"))}
           >
             <Icon name="chat" size={15} />
-            Discuss next steps
+            {t("overview.discussNext")}
           </button>
         }
       >
-        Follow the questions, work in progress and findings from the same
-        conversation.
+        {t("overview.subtitle")}
       </PageHeading>
       {lab.researchLine && (
-        <section className="direction" aria-label="Research direction">
-          <p className="eyebrow">Research direction</p>
+        <section
+          className="direction"
+          aria-label={t("shell.researchDirection")}
+        >
+          <p className="eyebrow">{t("shell.researchDirection")}</p>
           <p>{lab.researchLine}</p>
         </section>
       )}
       <div className="stats">
-        <div className="stat">
+        <a
+          className="stat"
+          href={routePath({ labId: lab.id, page: "overview" })}
+          onClick={(event) => {
+            event.preventDefault();
+            document
+              .getElementById("research-questions")
+              ?.scrollIntoView({ behavior: "smooth" });
+          }}
+        >
           <strong>
             {
               overview.questions.filter((entry) =>
@@ -216,16 +261,29 @@ export function Overview({
               ).length
             }
           </strong>
-          <span>Open questions</span>
-        </div>
-        <div className="stat">
+          <span>{t("overview.openQuestions")}</span>
+        </a>
+        <a
+          className="stat"
+          href={routePath({ labId: lab.id, page: "experiments" })}
+        >
           <strong>{overview.experiments.length}</strong>
-          <span>Experiments</span>
-        </div>
-        <div className="stat">
+          <span>{t("overview.experiments")}</span>
+        </a>
+        <a
+          className={activeRuns.length ? "stat live" : "stat"}
+          href={routePath({
+            labId: lab.id,
+            page: "experiments",
+            ...(activeRuns[0] && {
+              id: activeRuns[0].experimentId,
+              tab: "runs",
+            }),
+          })}
+        >
           <strong>{activeRuns.length}</strong>
-          <span>Active runs</span>
-        </div>
+          <span>{t("overview.activeRuns")}</span>
+        </a>
         <div className="stat">
           <strong>
             {
@@ -234,21 +292,38 @@ export function Overview({
               ).length
             }
           </strong>
-          <span>Standing conclusions</span>
+          <span>{t("overview.standingConclusions")}</span>
         </div>
       </div>
-      {(failures.length > 0 ||
+      {(needsReview.length > 0 ||
+        failures.length > 0 ||
         overview.activeTurn?.status === "paused" ||
         overview.activeTurn?.error) && (
         <section className="panel" style={{ marginBottom: 22 }}>
           <div className="section-heading">
-            <h2>Needs attention</h2>
+            <h2>{t("overview.needsAttention")}</h2>
           </div>
+          {needsReview.map((record) => (
+            <p key={record.id}>
+              <span className="status status-paused">
+                {t("common.needsReview")}
+              </span>{" "}
+              <a
+                href={routePath({
+                  labId: lab.id,
+                  page: "overview",
+                  id: record.questionId,
+                })}
+              >
+                {record.statement}
+              </a>
+            </p>
+          ))}
           {overview.activeTurn?.status === "paused" && (
             <p>
-              Pico's turn is paused.{" "}
+              {t("overview.turnPaused")}{" "}
               <a href={routePath({ labId: lab.id, page: "chat" })}>
-                Continue in the conversation
+                {t("overview.continueInConversation")}
               </a>
               .
             </p>
@@ -264,12 +339,19 @@ export function Overview({
                   tab: "runs",
                 })}
               >
-                {overview.experiments.find((row) => row.id === run.experimentId)
-                  ?.title ?? "Experiment"}{" "}
-                · attempt {run.attempt}
+                {t("common.attemptOf", {
+                  title:
+                    overview.experiments.find(
+                      (row) => row.id === run.experimentId,
+                    )?.title ?? t("common.experiment"),
+                  attempt: run.attempt,
+                })}
               </a>
               <p className="meta">
-                {run.error ?? `Run ${run.status.replaceAll("_", " ")}`}
+                {run.error ??
+                  t("overview.runStatus", {
+                    status: statusLabel(run.status).toLowerCase(),
+                  })}
               </p>
             </div>
           ))}
@@ -278,18 +360,15 @@ export function Overview({
       <div className="grid-main">
         <div className="stack">
           <Section
-            title="Research questions"
+            id="research-questions"
+            title={t("common.researchQuestions")}
             action={
               <button
                 className="text-button"
                 type="button"
-                onClick={() =>
-                  discuss(
-                    "Let's define a new research question for this laboratory.",
-                  )
-                }
+                onClick={() => discuss(t("overview.newQuestionPrompt"))}
               >
-                Explore a question
+                {t("overview.exploreQuestion")}
               </button>
             }
           >
@@ -298,13 +377,12 @@ export function Overview({
                 <QuestionRecord key={row.id} row={row} overview={overview} />
               ))
             ) : (
-              <Empty title="Your first question starts in conversation">
-                Tell Pico what you want to investigate. The question and its
-                progress will appear here.
+              <Empty title={t("overview.firstQuestion")}>
+                {t("overview.firstQuestionBody")}
               </Empty>
             )}
           </Section>
-          <Section title="Recent activity">
+          <Section title={t("overview.recentActivity")}>
             {overview.events.length ? (
               <ol className="timeline">
                 {[...overview.events]
@@ -312,7 +390,7 @@ export function Overview({
                   .slice(0, 12)
                   .map((event) => (
                     <li key={event.id}>
-                      {event.message}
+                      <IdText>{event.message}</IdText>
                       <time dateTime={event.createdAt}>
                         {timestamp(event.createdAt)}
                       </time>
@@ -320,25 +398,30 @@ export function Overview({
                   ))}
               </ol>
             ) : (
-              <Empty title="No recorded changes yet">
-                Changes made through Pico's tools will appear here.
+              <Empty title={t("overview.noActivity")}>
+                {t("overview.noActivityBody")}
               </Empty>
             )}
           </Section>
         </div>
         <aside className="stack">
-          <Section title="Happening now">
+          <Section title={t("overview.happeningNow")}>
             {overview.activeTurn && (
               <div className="record">
                 <div className="record-heading">
                   <h3>
                     <a href={routePath({ labId: lab.id, page: "chat" })}>
-                      Pico's conversation
+                      {t("overview.picoConversation")}
                     </a>
                   </h3>
                   <Status value={overview.activeTurn.status} />
                 </div>
-                <p className="meta">{overview.activeTurn.steps} model steps</p>
+                <p className="meta">
+                  {t("overview.modelSteps", {
+                    count: overview.activeTurn.steps,
+                  })}{" "}
+                  · {timestamp(overview.activeTurn.createdAt)}
+                </p>
               </div>
             )}
             {activeRuns.map((run) => (
@@ -355,24 +438,24 @@ export function Overview({
                     >
                       {overview.experiments.find(
                         (row) => row.id === run.experimentId,
-                      )?.title ?? "Experiment"}
+                      )?.title ?? t("common.experiment")}
                     </a>
                   </h3>
                   <Status value={run.status} />
                 </div>
                 <p className="meta">
-                  Attempt {run.attempt} ·{" "}
+                  {t("common.attempt", { attempt: run.attempt })} ·{" "}
                   {timestamp(run.startedAt ?? run.createdAt)}
                 </p>
               </div>
             ))}
             {!overview.activeTurn && !activeRuns.length && (
-              <Empty title="The laboratory is quiet">
-                Start the next investigation with Pico.
+              <Empty title={t("overview.quiet")}>
+                {t("overview.quietBody")}
               </Empty>
             )}
           </Section>
-          <Section title="Recent conclusions">
+          <Section title={t("overview.recentConclusions")}>
             {overview.conclusions.length ? (
               [...overview.conclusions]
                 .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -385,15 +468,16 @@ export function Overview({
                   />
                 ))
             ) : (
-              <Empty title="Findings will gather here">
-                Each conclusion retains its sources and limitations.
+              <Empty title={t("overview.findingsEmpty")}>
+                {t("overview.findingsEmptyBody")}
               </Empty>
             )}
           </Section>
-          <Section title="Library">
-            <div className="record-meta">
+          <Section title={t("overview.library")}>
+            <div className="library-links">
               <a href={routePath({ labId: lab.id, page: "library" })}>
-                {overview.papers.length} papers
+                <strong>{overview.papers.length}</strong>
+                {t("overview.papers", { count: overview.papers.length })}
               </a>
               <a
                 href={routePath({
@@ -402,7 +486,10 @@ export function Overview({
                   tab: "datasets",
                 })}
               >
-                {overview.datasets.length} dataset versions
+                <strong>{overview.datasets.length}</strong>
+                {t("overview.datasetVersions", {
+                  count: overview.datasets.length,
+                })}
               </a>
             </div>
           </Section>

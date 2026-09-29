@@ -94,7 +94,17 @@ export class ResearchExecution {
         throw new RunnerError(
           "The preserved run timeout exceeds the current laboratory limit; increase the limit before reproducing these conditions",
         );
-      if (request.args || request.config)
+      if (
+        (request.args !== undefined &&
+          !isDeepStrictEqual(request.args, reference.request.args ?? [])) ||
+        (request.config !== undefined &&
+          !isDeepStrictEqual(request.config, reference.request.config)) ||
+        (request.resources !== undefined &&
+          !isDeepStrictEqual(
+            request.resources,
+            reference.request.resources ?? {},
+          ))
+      )
         throw new RunnerError(
           "Reproduction preserves arguments and configuration from its reference run",
         );
@@ -127,6 +137,7 @@ export class ResearchExecution {
           timeoutMs:
             (input.timeoutSeconds ?? request.timeoutSeconds ?? 60) * 1000,
           runtime: experiment.runtime,
+          ...(request.resources && { resources: request.resources }),
         },
         {
           workspaceDir: await this.files.workspace(run.labId, experiment.id),
@@ -177,8 +188,16 @@ export class ResearchExecution {
     );
   }
   async allRuns(): Promise<Run[]> {
+    const inventory = await this.runner.inventory();
+    const diagnosed = new Set(
+      inventory.issues
+        .filter((issue) => issue.runId !== undefined)
+        .map((issue) => `${issue.labId}:${issue.runId}`),
+    );
     return Promise.all(
-      (await this.runner.allRuns()).map((record) => this.projectRun(record)),
+      (await this.runner.allRuns())
+        .filter((record) => !diagnosed.has(`${record.labId}:${record.id}`))
+        .map((record) => this.projectRun(record)),
     );
   }
   async reconcile(): Promise<void> {

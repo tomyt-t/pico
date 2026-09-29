@@ -7,15 +7,19 @@ import { id, ids, safePath, text } from "@/lab/contracts/validation";
 
 export interface Criterion {
   hypothesisId: string;
+  /** Assigned by the laboratory when criteria are explicitly registered. Absent on legacy protocols. */
+  hypothesisRevision?: number;
   metric: string;
   expectation: string;
   comparator?: "gt" | "gte" | "lt" | "lte" | "eq";
   threshold?: number;
   split?: string;
   unit?: string;
+  step?: number;
 }
 
 export interface Experiment extends RecordMeta {
+  executionAccess?: { piProfile: boolean };
   title: string;
   objective: string;
   questionIds: string[];
@@ -37,6 +41,7 @@ export interface DatasetInput {
 }
 
 export interface RunSnapshot {
+  resources?: ExecutionResources;
   schemaVersion: 1;
   experimentId: string;
   experimentRevision: number;
@@ -91,21 +96,42 @@ export interface Run extends RecordMeta {
 }
 
 export interface RunRequest {
+  resources?: ExecutionResources;
   args?: string[];
   config?: JsonObject;
   timeoutSeconds?: number;
   referenceRunId?: string;
 }
 
+export interface ExecutionResources {
+  memoryMiB?: number;
+  gpuDevices?: string[];
+}
+export const executionResourcesSchema = z
+  .object({
+    memoryMiB: z.number().int().min(64).max(1_048_576).optional(),
+    gpuDevices: z
+      .array(z.string().regex(/^\d+$/))
+      .max(16)
+      .refine(
+        (ids) => new Set(ids).size === ids.length,
+        "GPU identifiers must be unique",
+      )
+      .optional(),
+  })
+  .strict();
+
 export const criterionSchema = z
   .object({
     hypothesisId: id,
+    hypothesisRevision: z.number().int().positive().optional(),
     metric: text.max(200),
     expectation: text,
     comparator: z.enum(["gt", "gte", "lt", "lte", "eq"]).optional(),
     threshold: z.number().finite().optional(),
     split: z.string().max(200).optional(),
     unit: z.string().max(100).optional(),
+    step: z.number().finite().optional(),
   })
   .strict()
   .refine(
@@ -116,6 +142,7 @@ export const criterionSchema = z
   );
 export const experimentSchema = z
   .object({
+    executionAccess: z.object({ piProfile: z.boolean() }).strict().optional(),
     title: text.max(300),
     objective: text,
     questionIds: ids.min(1),
@@ -142,6 +169,7 @@ export const artifactSchema = fileSchema.extend({
 });
 export const runSnapshotSchema = z
   .object({
+    resources: executionResourcesSchema.optional(),
     schemaVersion: z.literal(1),
     experimentId: id,
     experimentRevision: z.number().int().positive(),

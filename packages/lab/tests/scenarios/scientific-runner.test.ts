@@ -170,7 +170,7 @@ describe("preserved local execution", () => {
         revision: 2,
       },
       datasets: [],
-      request: { referenceRunId: "run-1" },
+      request: { referenceRunId: "run-1", config: { seed: 17 }, args: [] },
     });
     const reproduction = await f.runner.waitForRun("lab-1", "run-2");
     expect(reproduction.status).toBe("succeeded");
@@ -184,6 +184,14 @@ describe("preserved local execution", () => {
     expect(reproduction.snapshot?.codeHash).toBe(
       (await f.runner.getRun("lab-1", "run-1")).snapshot?.codeHash,
     );
+    await expect(
+      f.runner.submit({
+        run: { ...f.run("run-3"), referenceRunId: "run-1" },
+        experiment: f.experiment,
+        datasets: [],
+        request: { referenceRunId: "run-1", config: { seed: 18 } },
+      }),
+    ).rejects.toThrow("preserves arguments and configuration");
   });
   test("a repeated submission never starts a second process", async () => {
     const f = await fixture();
@@ -587,7 +595,14 @@ describe("portable run archives and frozen dependencies", () => {
       expect((await engine.getRun("lab-1", "run-1")).status).toBe("running");
       await engine.reconcile();
       expect((await engine.getRun("lab-1", "run-1")).status).toBe("running");
-      expect((await engine.inventory()).runs[0]?.state).toBe("unknown");
+      const inventory = await engine.inventory();
+      expect(inventory.issues).toContainEqual(
+        expect.objectContaining({
+          runId: "run-1",
+          kind: "unreadable_snapshot",
+        }),
+      );
+      expect(inventory.safeToBackup).toBe(false);
     } finally {
       await engine.close();
       await rm(root, { recursive: true });

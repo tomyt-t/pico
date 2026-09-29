@@ -1,6 +1,8 @@
 import type { Lab } from "@pico/lab/contracts";
 import { useEffect, useId, useRef } from "react";
+import { useTranslation } from "@/web/components/i18n";
 import { Icon } from "@/web/components/primitives";
+import { AdministrativeSettings } from "@/web/features/settings/administrative-settings";
 import { LabForm } from "@/web/features/settings/laboratory-form";
 
 export function Settings({
@@ -12,6 +14,7 @@ export function Settings({
   onClose: () => void;
   onSaved: (lab: Lab) => void;
 }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -26,17 +29,20 @@ export function Settings({
       onClose={onClose}
     >
       <div className="modal-heading">
-        <h2 id={titleId}>{lab ? "Laboratory settings" : "New laboratory"}</h2>
+        <h2 id={titleId}>
+          {lab ? t("settings.title") : t("settings.newTitle")}
+        </h2>
         <button
           type="button"
           className="icon-button"
           onClick={onClose}
-          aria-label="Close settings"
+          aria-label={t("settings.closeLabel")}
         >
           <Icon name="close" />
         </button>
       </div>
       <LabForm lab={lab} onSaved={onSaved} onCancel={onClose} />
+      {lab && <AdministrativeSettings />}
     </dialog>
   );
 }

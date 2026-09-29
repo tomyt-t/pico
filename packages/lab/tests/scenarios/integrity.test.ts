@@ -41,6 +41,16 @@ function fixture(overrides: Partial<LocalRunner> = {}) {
   const runner = {
     reconcile: async () => {},
     allRuns: async () => [],
+    runner: {
+      inventory: async () => ({
+        runs: [],
+        issues: [],
+        pendingDeliveries: [],
+        pendingPublications: [],
+        recoveredPublications: [],
+        safeToBackup: true,
+      }),
+    },
     ...overrides,
   } as unknown as LocalRunner;
   const operations = new ResearchOperations(lab, store, runner);

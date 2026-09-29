@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { errorText, request } from "@/web/api/http-client";
+import { errorText, type ResponseCache, request } from "@/web/api/http-client";
+
+export function pollingDelay(interval: number, failures: number) {
+  return Math.min(60_000, interval * 2 ** Math.min(failures, 6));
+}
 
 export function usePoll<T>(path: string | null, interval = 5000) {
   const [state, setState] = useState<{
@@ -19,32 +23,51 @@ export function usePoll<T>(path: string | null, interval = 5000) {
     let closed = false;
     let busy = false;
     let controller: AbortController | undefined;
+    let timer: number | undefined;
+    let failures = 0;
+    const cache: ResponseCache<T> = {};
     setState((previous) =>
       previous.path === path ? previous : { path, loading: true },
     );
     const read = async () => {
       if (closed || busy) return;
       busy = true;
+      window.clearTimeout(timer);
       controller = new AbortController();
       try {
-        const data = await request<T>(path, { signal: controller.signal });
-        if (!closed) setState({ path, data, loading: false });
+        const data = await request<T>(path, {
+          signal: controller.signal,
+          cache,
+        });
+        failures = 0;
+        if (!closed)
+          setState((previous) =>
+            previous.path === path && previous.data === data && !previous.error
+              ? previous
+              : { path, data, loading: false },
+          );
       } catch (error) {
-        if (!closed && !controller.signal.aborted)
+        if (!closed && !controller.signal.aborted) {
+          failures++;
           setState((previous) => ({
             path,
             data: previous.path === path ? previous.data : undefined,
             error: errorText(error),
             loading: false,
           }));
+        }
       } finally {
         busy = false;
+        if (!closed)
+          timer = window.setTimeout(
+            () => {
+              if (document.visibilityState === "visible") void read();
+            },
+            pollingDelay(interval, failures),
+          );
       }
     };
     void read();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void read();
-    }, interval);
     const visible = () => {
       if (document.visibilityState === "visible") void read();
     };
@@ -52,7 +75,7 @@ export function usePoll<T>(path: string | null, interval = 5000) {
     return () => {
       closed = true;
       controller?.abort();
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", visible);
     };
   }, [path, interval, revision]);

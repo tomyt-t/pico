@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "@/web/components/i18n";
 import { Loading, Notice } from "@/web/components/primitives";
 export function QueryState({
   loading,
@@ -13,18 +14,19 @@ export function QueryState({
   refresh: () => void;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       {error && (
         <Notice error>
           {error}
-          {hasData && " Displayed records may be out of date."}{" "}
+          {hasData && ` ${t("common.outOfDate")}`}{" "}
           <button type="button" className="text-button" onClick={refresh}>
-            Retry
+            {t("common.retry")}
           </button>
         </Notice>
       )}
-      {loading && <Loading>Loading laboratory records…</Loading>}
+      {loading && <Loading>{t("common.loadingRecords")}</Loading>}
       {children}
     </>
   );

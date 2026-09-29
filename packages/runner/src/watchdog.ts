@@ -39,10 +39,14 @@ export async function guardExecution(
       logsTruncated,
       requestedAt: new Date().toISOString(),
     };
-    // Cleanup is bounded even if log/metadata publication is slow or fails.
-    const kill = setTimeout(() => process.kill(-process.pid, "SIGKILL"), 200);
+    // The timer is independent of metadata IO. TERM gives Python a brief chance to
+    // flush observations; the guard remains alive to end every remaining group member.
+    const kill = setTimeout(() => process.kill(-process.pid, "SIGKILL"), 350);
+    process.kill(-process.pid, "SIGTERM");
     try {
+      await new Promise((resolve) => setTimeout(resolve, 200));
       await logQueue;
+      outcome.logsTruncated = logsTruncated;
       await atomicJson(join(runDir, "termination.json"), outcome);
     } catch {
       /* Recovery will retain incomplete observations. */
@@ -103,9 +107,20 @@ export async function guardExecution(
       void stop("failed", null, "Could not preserve execution logs");
     });
   };
+  let memoryMiB: number | undefined;
   const execute = (command: string[], env: NodeJS.ProcessEnv) =>
     new Promise<number | null>((resolve, reject) => {
-      const child = spawn(command[0] ?? "", command.slice(1), {
+      const invocation =
+        memoryMiB === undefined
+          ? command
+          : [
+              "python3",
+              "-c",
+              "import os,resource,sys; n=int(sys.argv[1]); resource.setrlimit(resource.RLIMIT_AS,(n,n)); os.execvp(sys.argv[2],sys.argv[2:])",
+              String(memoryMiB * 1024 * 1024),
+              ...command,
+            ];
+      const child = spawn(invocation[0] ?? "", invocation.slice(1), {
         cwd: join(runDir, "work", "code"),
         env,
         detached: false,
@@ -155,6 +170,10 @@ export async function guardExecution(
         process.env.PICO_RUNNER_BINDINGS ?? "{}",
       ) as Record<string, string>;
       const env = executionEnvironment(runDir, bindings);
+      memoryMiB = snapshot.request.resources?.memoryMiB;
+      if (snapshot.request.resources?.gpuDevices !== undefined)
+        env.CUDA_VISIBLE_DEVICES =
+          snapshot.request.resources.gpuDevices.join(",");
       let code: number | null = 0;
       if (snapshot.request.runtime === "uv")
         code = await execute(

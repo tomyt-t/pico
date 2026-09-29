@@ -1,5 +1,8 @@
 import { createRunner } from "@pico/runner";
-import type { MutationContext } from "@/lab/contracts";
+import type {
+  DatasetDirectoryRegistration,
+  MutationContext,
+} from "@/lab/contracts";
 import {
   createLaboratory,
   createResearchOperations,
@@ -8,6 +11,33 @@ import {
 } from "@/lab/research/laboratory";
 import { acquireApplicationLock } from "@/lab/storage/application-lock";
 import { createStorage, type Storage } from "@/lab/storage/storage";
+
+/** Offline import uses application exclusion without starting conversation or process dispatch. */
+export async function importDatasetDirectoryOffline(
+  dataDir: string,
+  labId: string,
+  input: DatasetDirectoryRegistration,
+  context: MutationContext,
+) {
+  const release = acquireApplicationLock(dataDir);
+  let storage: Storage | undefined;
+  try {
+    storage = createStorage(dataDir);
+    const lab = createLaboratory(storage);
+    const execution = new ResearchExecution(
+      storage.files,
+      createRunner({ dataDir }),
+    );
+    const operations = createResearchOperations(lab, storage, execution);
+    return await operations.importDatasetDirectory(labId, input, context);
+  } finally {
+    try {
+      storage?.close();
+    } finally {
+      release();
+    }
+  }
+}
 
 export async function publishBackup(input: {
   destination: string;

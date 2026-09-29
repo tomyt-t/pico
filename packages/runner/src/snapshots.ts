@@ -18,6 +18,7 @@ import {
   ensureDirectory,
   exists,
   type FileDigest,
+  type FileLimits,
   RunnerError,
   readBytes,
   readJson,
@@ -27,7 +28,10 @@ import {
 import { validateRequest, verifySnapshot } from "@/runner/format-v1";
 
 export class Snapshots {
-  constructor(private readonly files: ExecutionFiles) {}
+  constructor(
+    private readonly files: ExecutionFiles,
+    private readonly datasetLimits?: Partial<FileLimits>,
+  ) {}
   async get(labId: string, runId: string): Promise<SnapshotManifest> {
     return verifySnapshot(
       await readJson<SnapshotManifest>(
@@ -122,6 +126,7 @@ export class Snapshots {
             ),
             join(staging, "snapshot", "inputs", dataset.id),
             dataset.files,
+            this.datasetLimits,
           );
       } else {
         if (!sources)
@@ -154,6 +159,7 @@ export class Snapshots {
             source.filesDir,
             join(staging, "snapshot", "inputs", datasetId),
             dataset.files,
+            this.datasetLimits,
           );
           datasets.push(dataset);
         }
@@ -219,6 +225,7 @@ export class Snapshots {
           join(staging, "snapshot", "inputs", dataset.id),
           join(staging, "work", "inputs", dataset.id),
           dataset.files,
+          this.datasetLimits,
         );
       await mkdir(join(staging, "outputs"));
       const command =

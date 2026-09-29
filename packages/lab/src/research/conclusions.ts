@@ -8,7 +8,10 @@ import type {
 } from "@/lab/contracts";
 import { conclusionSchema } from "@/lab/contracts";
 import { LabError, parse } from "@/lab/research/errors";
-import { validateEvidenceForQuestion } from "@/lab/research/evidence";
+import {
+  resultRevisions,
+  validateEvidenceForQuestion,
+} from "@/lab/research/evidence";
 import {
   type ResearchContext,
   scientificFields,
@@ -25,6 +28,8 @@ export function recordConclusion(
     return context.insert(labId, "conclusion", {
       ...context.meta(labId, ctx.actor),
       ...fields,
+      resultRevisions: resultRevisions(context, labId, fields.resultIds),
+      needsReview: false,
     });
   });
 }
@@ -43,8 +48,13 @@ export function reviseConclusion(
     ctx,
     () => {
       const current = context.getRecord<Conclusion>(labId, "conclusion", id);
+      const {
+        resultRevisions: _basis,
+        needsReview: _review,
+        ...editable
+      } = scientificFields(current);
       const fields = parse(conclusionSchema, {
-        ...scientificFields(current),
+        ...editable,
         ...patch,
       });
       if (
@@ -57,7 +67,17 @@ export function reviseConclusion(
         );
       }
       validateConclusion(context, labId, fields, id);
-      return context.revise("conclusion", current, fields, ctx.actor, reason);
+      return context.revise(
+        "conclusion",
+        current,
+        {
+          ...fields,
+          resultRevisions: resultRevisions(context, labId, fields.resultIds),
+          needsReview: false,
+        },
+        ctx.actor,
+        reason,
+      );
     },
   );
 }

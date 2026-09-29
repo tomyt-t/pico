@@ -1,16 +1,21 @@
 import type { Lab, Turn } from "@pico/lab/contracts";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { navigate, type Page } from "@/web/app/navigation";
+import { statusLabel } from "@/web/components/format";
+import {
+  currentLanguage,
+  setLanguage,
+  useTranslation,
+} from "@/web/components/i18n";
 import { Icon } from "@/web/components/primitives";
 export const pages: {
   id: Page;
-  label: string;
   icon: "chat" | "overview" | "experiment" | "library";
 }[] = [
-  { id: "chat", label: "Chat", icon: "chat" },
-  { id: "overview", label: "Overview", icon: "overview" },
-  { id: "experiments", label: "Experiments", icon: "experiment" },
-  { id: "library", label: "Library", icon: "library" },
+  { id: "chat", icon: "chat" },
+  { id: "overview", icon: "overview" },
+  { id: "experiments", icon: "experiment" },
+  { id: "library", icon: "library" },
 ];
 export function AppShell({
   labs,
@@ -35,6 +40,7 @@ export function AppShell({
   onRefresh: () => void;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <>
       <button
@@ -45,26 +51,38 @@ export function AppShell({
           document.getElementById("main-content")?.focus();
         }}
       >
-        Skip to workspace
+        {t("shell.skip")}
       </button>
       <div className="shell">
-        <aside className="sidebar" aria-label="Laboratory navigation">
+        <aside className="sidebar" aria-label={t("shell.navigation")}>
           <div className="brand">
             <span className="pico-mark">p</span>Pico
           </div>
           <div className="lab-switcher">
-            <label htmlFor="lab-switch" className="eyebrow">
-              Laboratory
-            </label>
+            <div className="lab-switcher-heading">
+              <label htmlFor="lab-switch" className="eyebrow">
+                {t("shell.laboratory")}
+              </label>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => onSettings("new")}
+                aria-label={t("shell.newLaboratory")}
+                title={t("shell.newLaboratory")}
+              >
+                <Icon name="plus" size={15} />
+              </button>
+            </div>
             <select
               id="lab-switch"
               value={labId}
+              title={lab?.name}
               onChange={(event) =>
                 navigate({ labId: event.target.value, page: "chat" })
               }
             >
               {!labs?.some((entry) => entry.id === labId) && (
-                <option value={labId}>Unknown laboratory</option>
+                <option value={labId}>{t("shell.unknownLaboratory")}</option>
               )}
               {labs?.map((entry) => (
                 <option value={entry.id} key={entry.id}>
@@ -72,15 +90,8 @@ export function AppShell({
                 </option>
               ))}
             </select>
-            <button
-              className="text-button meta"
-              type="button"
-              onClick={() => onSettings("new")}
-            >
-              + New laboratory
-            </button>
           </div>
-          <nav aria-label="Pages">
+          <nav aria-label={t("shell.pagesLabel")}>
             {pages.map((entry) => (
               <button
                 key={entry.id}
@@ -90,32 +101,31 @@ export function AppShell({
                 onClick={() => navigate({ labId, page: entry.id })}
               >
                 <Icon name={entry.icon} />
-                <span>{entry.label}</span>
+                <span>{t(`shell.pages.${entry.id}`)}</span>
               </button>
             ))}
           </nav>
           <div className="sidebar-detail">
-            <p className="eyebrow">Research direction</p>
-            <p>
-              {lab?.researchLine ||
-                "A direction will take shape in your conversation with Pico."}
-            </p>
-            <p className="meta">
-              One main conversation.
-              <br />A shared record of the research.
+            <p className="eyebrow">{t("shell.researchDirection")}</p>
+            <p className="clamp" style={{ "--lines": 6 } as CSSProperties}>
+              {lab?.researchLine || t("shell.directionPlaceholder")}
             </p>
           </div>
           <div className="sidebar-footer">
             <span className="session-indicator">
               <span className={`dot ${active ? "busy" : ""}`} />
-              {active ? `Pico · ${active.status}` : "Pico · idle"}
+              {active
+                ? t("shell.picoStatus", {
+                    status: statusLabel(active.status).toLowerCase(),
+                  })
+                : t("shell.picoIdle")}
             </span>
             <button
               type="button"
               className="icon-button"
               onClick={() => onSettings("edit")}
               disabled={!lab}
-              aria-label="Laboratory settings"
+              aria-label={t("shell.settings")}
             >
               <Icon name="settings" size={17} />
             </button>
@@ -125,39 +135,37 @@ export function AppShell({
           id="main-content"
           className="workspace"
           tabIndex={-1}
-          aria-label={`${pages.find((entry) => entry.id === page)?.label ?? "Laboratory"} workspace`}
+          aria-label={t(`shell.pages.${page}`)}
         >
           <header className="topbar">
             <div className="breadcrumbs">
-              <strong>{lab?.name ?? "Laboratory"}</strong>
-              <span>/</span>
-              <span>{pages.find((entry) => entry.id === page)?.label}</span>
+              <strong>{lab?.name ?? t("shell.laboratory")}</strong>
+              <span aria-hidden="true">/</span>
+              <span>{t(`shell.pages.${page}`)}</span>
             </div>
             <div className="topbar-actions">
-              <span
-                className="meta"
-                title={
-                  lab?.settings.provider.mode === "pi"
-                    ? `Pi · ${lab.settings.provider.provider ?? "provider"} / ${lab.settings.provider.model}`
-                    : lab?.settings.provider.model
-                }
-                style={{
-                  maxWidth: 300,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {lab?.settings.provider.mode === "demo"
-                  ? "Demonstration"
-                  : lab?.settings.provider.mode === "pi"
-                    ? `Pi · ${lab.settings.provider.provider ?? "provider"} / ${lab.settings.provider.model}`
-                    : lab?.settings.provider.model}
-              </span>
+              {lab && (
+                <button
+                  className="model-chip"
+                  type="button"
+                  title={t("shell.openSettings")}
+                  onClick={() => onSettings("edit")}
+                >
+                  {lab.settings.provider.mode === "pi" && (
+                    <span className="muted">
+                      {lab.settings.provider.provider ?? "Pi"}
+                    </span>
+                  )}
+                  {lab.settings.provider.mode === "demo"
+                    ? t("shell.demonstration")
+                    : lab.settings.provider.model}
+                </button>
+              )}
               <button
                 className="icon-button"
                 type="button"
-                aria-label="Refresh laboratory"
+                aria-label={t("shell.refresh")}
+                title={t("shell.refresh")}
                 onClick={onRefresh}
               >
                 <Icon name="refresh" size={16} />
@@ -165,15 +173,36 @@ export function AppShell({
               <button
                 className="icon-button"
                 type="button"
-                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+                aria-label={
+                  theme === "dark"
+                    ? t("shell.lightTheme")
+                    : t("shell.darkTheme")
+                }
+                title={
+                  theme === "dark"
+                    ? t("shell.lightTheme")
+                    : t("shell.darkTheme")
+                }
                 onClick={() => onTheme(theme === "dark" ? "light" : "dark")}
               >
                 <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
               </button>
               <button
+                className="icon-button language-button"
+                type="button"
+                aria-label={t("shell.switchLanguage")}
+                title={t("shell.switchLanguage")}
+                onClick={() =>
+                  setLanguage(currentLanguage() === "en" ? "pt-BR" : "en")
+                }
+              >
+                {t("shell.languageCode")}
+              </button>
+              <button
                 className="icon-button"
                 type="button"
-                aria-label="Open laboratory settings"
+                aria-label={t("shell.openSettings")}
+                title={t("shell.settings")}
                 onClick={() => onSettings("edit")}
                 disabled={!lab}
               >
@@ -183,18 +212,17 @@ export function AppShell({
           </header>
           {lab?.settings.provider.mode === "demo" && (
             <div className="notice demo" role="status">
-              Demonstration model: narration is simulated; tools create real
-              records.
+              {t("shell.demoNotice")}
               {!lab.settings.executionEnabled && (
                 <>
                   {" "}
-                  Local execution is off.{" "}
+                  {t("shell.executionOff")}{" "}
                   <button
                     type="button"
                     className="text-button"
                     onClick={() => onSettings("edit")}
                   >
-                    Settings
+                    {t("shell.settingsLink")}
                   </button>
                 </>
               )}

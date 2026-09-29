@@ -1,6 +1,9 @@
 import type { Lab, ProviderConfig } from "@pico/lab/contracts";
+import { locale } from "@/web/components/format";
+import { Trans, useTranslation } from "@/web/components/i18n";
 import { Notice } from "@/web/components/primitives";
 import type { useModelSelection } from "@/web/features/settings/model-selection";
+
 export function ModelFields({
   selection,
   lab,
@@ -27,65 +30,65 @@ export function ModelFields({
     selectedProvider,
     selectedModel,
   } = selection;
+  const { t } = useTranslation();
   return (
     <>
       <label className="field">
-        Pico's model
+        {t("model.label")}
         <select
           name="providerMode"
           value={mode}
           onChange={(e) => changeMode(e.target.value as ProviderConfig["mode"])}
         >
-          <option value="pi">Pi · Pico's isolated profile</option>
-          <option value="demo">Demonstration · simulated model</option>
-          <option value="openai-compatible">
-            Advanced · OpenAI-compatible API
-          </option>
+          <option value="pi">{t("model.pi")}</option>
+          <option value="demo">{t("model.demo")}</option>
+          <option value="openai-compatible">{t("model.advanced")}</option>
         </select>
       </label>
       {mode === "pi" ? (
         <>
           <Notice>
-            Sign in with <code>bun run pi</code>, then <code>/login</code>. Pico
-            keeps its own profile, separate from your personal Pi.
+            <Trans i18nKey="model.piNotice" components={{ code: <code /> }} />
           </Notice>
           {catalog.loading && (
             <p className="meta" role="status">
-              Loading your Pi providers and models…
+              {t("model.loadingCatalog")}
             </p>
           )}
           {catalog.error && (
             <Notice error>
-              Could not refresh the Pi catalog: {catalog.error}.{" "}
+              {t("model.catalogError", { error: catalog.error })}{" "}
               {lab?.settings.provider.mode === "pi"
-                ? "Your saved selection is preserved."
-                : "You can retry, use the demonstration, or configure the advanced API."}{" "}
+                ? t("model.selectionPreserved")
+                : t("model.catalogAlternatives")}{" "}
               <button
                 type="button"
                 className="text-button"
                 onClick={catalog.refresh}
               >
-                Retry
+                {t("common.retry")}
               </button>
             </Notice>
           )}
           {catalog.data?.warning && <Notice>{catalog.data.warning}</Notice>}
           {catalog.data && !catalog.data.providers.length && (
             <Notice>
-              No Pi providers are available yet. Run <code>bun run pi</code> and
-              sign in with <code>/login</code>, then refresh the catalog.{" "}
+              <Trans
+                i18nKey="model.noProviders"
+                components={{ code: <code /> }}
+              />{" "}
               <button
                 type="button"
                 className="text-button"
                 onClick={catalog.refresh}
               >
-                Refresh catalog
+                {t("model.refreshCatalog")}
               </button>
             </Notice>
           )}
           <div className="field-row">
             <label className="field">
-              Pi provider
+              {t("model.provider")}
               <select
                 name="piProvider"
                 required
@@ -100,25 +103,25 @@ export function ModelFields({
                 }}
               >
                 <option value="" disabled>
-                  Select a provider
+                  {t("model.selectProvider")}
                 </option>
                 {piProvider && !selectedProvider && (
                   <option value={piProvider}>
-                    {piProvider} · saved selection
+                    {t("model.savedSelection", { value: piProvider })}
                   </option>
                 )}
                 {catalog.data?.providers.map((entry) => (
                   <option key={entry.id} value={entry.id}>
                     {entry.name}
                     {entry.authenticated
-                      ? " · signed in"
-                      : " · sign-in required"}
+                      ? t("model.signedIn")
+                      : t("model.signInRequired")}
                   </option>
                 ))}
               </select>
             </label>
             <label className="field">
-              Pi model
+              {t("model.piModel")}
               <select
                 name="piModel"
                 required
@@ -134,10 +137,12 @@ export function ModelFields({
                 }}
               >
                 <option value="" disabled>
-                  Select a model
+                  {t("model.selectModel")}
                 </option>
                 {piModel && !selectedModel && (
-                  <option value={piModel}>{piModel} · saved selection</option>
+                  <option value={piModel}>
+                    {t("model.savedSelection", { value: piModel })}
+                  </option>
                 )}
                 {selectedProvider?.models.map((entry) => (
                   <option key={entry.id} value={entry.id}>
@@ -148,34 +153,29 @@ export function ModelFields({
             </label>
           </div>
           {selectedProvider && !selectedProvider.authenticated && (
-            <Notice>
-              This provider has no Pi sign-in available. You can save the
-              selection now; sign in through Pi before starting an
-              investigation.
-            </Notice>
+            <Notice>{t("model.noSignIn")}</Notice>
           )}
           {catalog.data && piProvider && !selectedProvider && (
-            <Notice>
-              The saved provider is not in the current Pi catalog. It has been
-              preserved; check your Pi configuration before starting an
-              investigation.
-            </Notice>
+            <Notice>{t("model.providerMissing")}</Notice>
           )}
           {selectedProvider && piModel && !selectedModel && (
-            <Notice>
-              The saved model is not listed by this provider. Choose an
-              available model or check your Pi configuration.
-            </Notice>
+            <Notice>{t("model.modelMissing")}</Notice>
           )}
           {selectedModel && (
             <p className="meta">
-              {selectedModel.input.includes("image") ? "Text + image" : "Text"}{" "}
-              · {selectedModel.contextWindow.toLocaleString()} token context ·
-              up to {selectedModel.maxTokens.toLocaleString()} output tokens
+              {t("model.capabilities", {
+                input: selectedModel.input.includes("image")
+                  ? t("model.textImage")
+                  : t("model.text"),
+                contextWindow: selectedModel.contextWindow.toLocaleString(
+                  locale(),
+                ),
+                output: selectedModel.maxTokens.toLocaleString(locale()),
+              })}
             </p>
           )}
           <label className="field">
-            Reasoning effort
+            {t("model.reasoning")}
             <select
               name="piThinking"
               value={selectedModel?.reasoning === false ? "off" : thinking}
@@ -198,29 +198,23 @@ export function ModelFields({
                 ] as const
               ).map((value) => (
                 <option key={value} value={value}>
-                  {value === "xhigh"
-                    ? "Extra high"
-                    : value[0]?.toUpperCase() + value.slice(1)}
+                  {t(`model.reasoningLevels.${value}`)}
                 </option>
               ))}
             </select>
             <small>
               {selectedModel?.reasoning === false
-                ? "This model does not expose reasoning effort."
-                : "The selected provider and model determine the available reasoning behavior."}
+                ? t("model.reasoningUnavailable")
+                : t("model.reasoningHint")}
             </small>
           </label>
         </>
       ) : mode === "demo" ? (
-        <Notice>
-          The demonstration uses a scripted model. Its tool calls create real
-          laboratory records; scientific narration is simulated. Local
-          experiments execute only when enabled below.
-        </Notice>
+        <Notice>{t("model.demoNotice")}</Notice>
       ) : (
         <>
           <label className="field">
-            API endpoint
+            {t("model.endpoint")}
             <input
               name="providerEndpoint"
               required
@@ -232,17 +226,17 @@ export function ModelFields({
           </label>
           <div className="field-row">
             <label className="field">
-              Model name
+              {t("model.modelName")}
               <input
                 name="providerModel"
                 required
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder="Model identifier"
+                placeholder={t("model.modelPlaceholder")}
               />
             </label>
             <label className="field">
-              Server key variable
+              {t("model.keyVariable")}
               <input
                 name="credentialVariable"
                 required
@@ -253,10 +247,7 @@ export function ModelFields({
               />
             </label>
           </div>
-          <p className="meta">
-            Set the API key in that environment variable on the server. Enter
-            only its variable name here. Calls use your provider account.
-          </p>
+          <p className="meta">{t("model.keyHint")}</p>
         </>
       )}
     </>

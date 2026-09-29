@@ -1,6 +1,8 @@
 import type { ExperimentDetail } from "@pico/lab/contracts";
 import { useEffect, useState } from "react";
 import { routePath } from "@/web/app/navigation";
+import { languageForPath } from "@/web/components/highlight";
+import { useTranslation } from "@/web/components/i18n";
 import {
   Code,
   Empty,
@@ -8,12 +10,14 @@ import {
   Notice,
   Section,
 } from "@/web/components/primitives";
+import { Hash } from "@/web/components/record-text";
 import {
   useWorkspaceFile,
   useWorkspaceFiles,
 } from "@/web/features/experiments/experiment-queries";
 
 export function CodeAndData({ detail }: { detail: ExperimentDetail }) {
+  const { t } = useTranslation();
   const files = useWorkspaceFiles(
     detail.experiment.labId,
     detail.experiment.id,
@@ -24,8 +28,14 @@ export function CodeAndData({ detail }: { detail: ExperimentDetail }) {
       files.data &&
       !files.data.files.some((entry) => entry.path === selected)
     )
-      setSelected(files.data.files[0]?.path ?? "");
-  }, [files.data, selected]);
+      setSelected(
+        files.data.files.find(
+          (entry) => entry.path === detail.experiment.entrypoint,
+        )?.path ??
+          files.data.files[0]?.path ??
+          "",
+      );
+  }, [files.data, selected, detail.experiment.entrypoint]);
   const file = useWorkspaceFile(
     detail.experiment.labId,
     detail.experiment.id,
@@ -33,17 +43,14 @@ export function CodeAndData({ detail }: { detail: ExperimentDetail }) {
   );
   return (
     <div className="stack">
-      <Section title="Current working code">
-        <p className="meta">
-          These files can evolve. Each run preserves its own code snapshot,
-          listed in the Runs tab.
-        </p>
+      <Section title={t("code.title")}>
+        <p className="meta">{t("code.hint")}</p>
         {files.error && <Notice error>{files.error}</Notice>}
         {files.loading ? (
-          <Loading>Listing files…</Loading>
+          <Loading>{t("code.listing")}</Loading>
         ) : files.data?.files.length ? (
           <div className="code-browser">
-            <nav className="file-list" aria-label="Experiment files">
+            <nav className="file-list" aria-label={t("code.files")}>
               {files.data.files.map((entry) => (
                 <button
                   key={entry.path}
@@ -52,6 +59,9 @@ export function CodeAndData({ detail }: { detail: ExperimentDetail }) {
                   onClick={() => setSelected(entry.path)}
                 >
                   {entry.path}
+                  {entry.path === detail.experiment.entrypoint && (
+                    <span className="entry-badge">{t("code.entry")}</span>
+                  )}
                 </button>
               ))}
             </nav>
@@ -60,24 +70,22 @@ export function CodeAndData({ detail }: { detail: ExperimentDetail }) {
               {file.error ? (
                 <Notice error>{file.error}</Notice>
               ) : file.loading ? (
-                <Loading>Reading file…</Loading>
+                <Loading>{t("code.reading")}</Loading>
               ) : (
                 <>
-                  <Code>{file.data?.content ?? ""}</Code>
-                  {file.data?.clipped && (
-                    <Notice>This file preview is truncated.</Notice>
-                  )}
+                  <Code language={languageForPath(selected)}>
+                    {file.data?.content ?? ""}
+                  </Code>
+                  {file.data?.clipped && <Notice>{t("code.truncated")}</Notice>}
                 </>
               )}
             </div>
           </div>
         ) : (
-          <Empty title="No working files yet">
-            Pico can prepare the code through the conversation.
-          </Empty>
+          <Empty title={t("code.noFiles")}>{t("code.noFilesBody")}</Empty>
         )}
       </Section>
-      <Section title="Dataset versions">
+      <Section title={t("code.datasets")}>
         {detail.datasets.length ? (
           detail.datasets.map((dataset) => (
             <article className="record" key={dataset.id}>
@@ -95,18 +103,18 @@ export function CodeAndData({ detail }: { detail: ExperimentDetail }) {
               </h3>
               <p>{dataset.description}</p>
               <div className="record-meta">
-                <span>{dataset.files.length} files</span>
+                <span>
+                  {t("common.files", { count: dataset.files.length })}
+                </span>
                 <span>{dataset.source}</span>
               </div>
-              <p className="meta mono" style={{ marginTop: 8 }}>
-                Manifest {dataset.manifestHash}
+              <p className="meta" style={{ marginTop: 8 }}>
+                {t("code.manifest")} <Hash value={dataset.manifestHash} />
               </p>
             </article>
           ))
         ) : (
-          <Empty title="No dataset versions linked">
-            Inputs are attached to the experiment and frozen into each run.
-          </Empty>
+          <Empty title={t("code.noDatasets")}>{t("code.noDatasetsBody")}</Empty>
         )}
       </Section>
     </div>

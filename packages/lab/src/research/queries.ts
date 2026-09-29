@@ -1,14 +1,66 @@
 import type {
+  Conclusion,
   DatasetVersion,
   Experiment,
   ExperimentDetail,
   Hypothesis,
   LabEvent,
   LabOverview,
+  Paper,
   Question,
+  RecordReference,
+  Result,
+  Run,
 } from "@/lab/contracts";
 import type { ResearchContext } from "@/lab/research/mutations";
-import { conversationView, getConversation } from "@/lab/research/notebook";
+import { getConversation } from "@/lab/research/notebook";
+
+export function recordIndex(
+  context: ResearchContext,
+  labId: string,
+): RecordReference[] {
+  context.getLab(labId);
+  return [
+    ...context.repo
+      .list<Question>("question", labId)
+      .map((r) => ({ id: r.id, kind: "question" as const, title: r.text })),
+    ...context.repo.list<Hypothesis>("hypothesis", labId).map((r) => ({
+      id: r.id,
+      kind: "hypothesis" as const,
+      title: r.statement,
+      questionId: r.questionId,
+    })),
+    ...context.repo
+      .list<Experiment>("experiment", labId)
+      .map((r) => ({ id: r.id, kind: "experiment" as const, title: r.title })),
+    ...context.repo.list<Run>("run", labId).map((r) => ({
+      id: r.id,
+      kind: "run" as const,
+      title: `Run ${r.attempt}`,
+      experimentId: r.experimentId,
+    })),
+    ...context.repo.list<Result>("result", labId).map((r) => ({
+      id: r.id,
+      kind: "result" as const,
+      title: r.interpretation,
+      experimentId: r.experimentId,
+    })),
+    ...context.repo.list<Conclusion>("conclusion", labId).map((r) => ({
+      id: r.id,
+      kind: "conclusion" as const,
+      title: r.statement,
+      questionId: r.questionId,
+    })),
+    ...context.repo
+      .list<Paper>("paper", labId)
+      .map((r) => ({ id: r.id, kind: "paper" as const, title: r.title })),
+    ...context.repo.list<DatasetVersion>("dataset", labId).map((r) => ({
+      id: r.id,
+      kind: "dataset" as const,
+      title: `${r.name} ${r.version}`,
+    })),
+  ].map((record) => ({ ...record, title: record.title.slice(0, 250) }));
+}
 export function overview(context: ResearchContext, labId: string): LabOverview {
   return {
     lab: context.getLab(labId),
@@ -22,7 +74,12 @@ export function overview(context: ResearchContext, labId: string): LabOverview {
     papers: context.repo.list("paper", labId),
     events: context.repo.list<LabEvent>("event", labId).reverse(),
     conversation: getConversation(context, labId),
-    activeTurn: conversationView(context, labId).activeTurn,
+    activeTurn: context.conversations.activeTurn(labId),
+    resumableTurns: context.conversations
+      .listTurns(labId)
+      .filter((turn) =>
+        ["paused", "failed", "interrupted", "cancelled"].includes(turn.status),
+      ),
   };
 }
 export function experimentDetail(

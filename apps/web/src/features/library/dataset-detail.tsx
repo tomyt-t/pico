@@ -1,6 +1,7 @@
 import type { DatasetVersion, LabOverview } from "@pico/lab/contracts";
 import { routePath } from "@/web/app/navigation";
 import { bytes, timestamp } from "@/web/components/format";
+import { useTranslation } from "@/web/components/i18n";
 import { PageHeading, Section } from "@/web/components/primitives";
 
 export function DatasetDetail({
@@ -10,6 +11,7 @@ export function DatasetDetail({
   dataset: DatasetVersion;
   overview: LabOverview;
 }) {
+  const { t } = useTranslation();
   const experiments = overview.experiments.filter((entry) =>
     entry.datasetVersionIds.includes(dataset.id),
   );
@@ -20,25 +22,27 @@ export function DatasetDetail({
   );
   return (
     <>
-      <PageHeading eyebrow="Library · dataset version" title={dataset.name}>
+      <PageHeading eyebrow={t("dataset.eyebrow")} title={dataset.name}>
         {dataset.description}
       </PageHeading>
       <div className="chip-row" style={{ marginBottom: 24 }}>
-        <span className="status">Version {dataset.version}</span>
+        <span className="status">
+          {t("common.version", { version: dataset.version })}
+        </span>
         <span className="meta">
-          {dataset.files.length} files ·{" "}
+          {t("common.files", { count: dataset.files.length })} ·{" "}
           {bytes(dataset.files.reduce((total, file) => total + file.size, 0))}
         </span>
       </div>
       <div className="grid-main">
         <div className="stack">
-          <Section title="Preserved files">
+          <Section title={t("dataset.preservedFiles")}>
             <div className="table-scroll">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>File</th>
-                    <th>Size</th>
+                    <th>{t("dataset.file")}</th>
+                    <th>{t("dataset.size")}</th>
                     <th>SHA-256</th>
                   </tr>
                 </thead>
@@ -54,8 +58,8 @@ export function DatasetDetail({
               </table>
             </div>
           </Section>
-          <Section title="Usage">
-            <h3>Current experiment links</h3>
+          <Section title={t("dataset.usage")}>
+            <h3>{t("dataset.linkedExperiments")}</h3>
             {experiments.length ? (
               <ul className="link-list">
                 {experiments.map((entry) => (
@@ -73,9 +77,9 @@ export function DatasetDetail({
                 ))}
               </ul>
             ) : (
-              <p className="meta">No current experiment links.</p>
+              <p className="meta">{t("dataset.noLinkedExperiments")}</p>
             )}
-            <h3 style={{ marginTop: 20 }}>Preserved in runs</h3>
+            <h3 style={{ marginTop: 20 }}>{t("dataset.preservedInRuns")}</h3>
             {runs.length ? (
               <ul className="link-list">
                 {runs.map((run) => (
@@ -88,43 +92,46 @@ export function DatasetDetail({
                         tab: "runs",
                       })}
                     >
-                      {overview.experiments.find(
-                        (entry) => entry.id === run.experimentId,
-                      )?.title ?? "Experiment"}{" "}
-                      · attempt {run.attempt}
+                      {t("common.attemptOf", {
+                        title:
+                          overview.experiments.find(
+                            (entry) => entry.id === run.experimentId,
+                          )?.title ?? t("common.experiment"),
+                        attempt: run.attempt,
+                      })}
                     </a>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="meta">No run has captured this version yet.</p>
+              <p className="meta">{t("dataset.noRunsCaptured")}</p>
             )}
           </Section>
         </div>
-        <Section title="Provenance">
+        <Section title={t("paper.provenance")}>
           <dl className="details-grid">
             <div>
-              <dt>Source</dt>
+              <dt>{t("common.source")}</dt>
               <dd>{dataset.source}</dd>
             </div>
             <div>
-              <dt>Declared license</dt>
-              <dd>{dataset.license || "Not recorded"}</dd>
+              <dt>{t("dataset.license")}</dt>
+              <dd>{dataset.license || t("common.notRecorded")}</dd>
             </div>
             <div>
-              <dt>Created</dt>
+              <dt>{t("dataset.created")}</dt>
               <dd>{timestamp(dataset.createdAt)}</dd>
             </div>
             <div>
-              <dt>Splits</dt>
+              <dt>{t("dataset.splits")}</dt>
               <dd>
                 {Object.entries(dataset.splits)
                   .map(([name, count]) => `${name}: ${count}`)
-                  .join(", ") || "Not declared"}
+                  .join(", ") || t("dataset.notDeclared")}
               </dd>
             </div>
             <div style={{ gridColumn: "1 / -1" }}>
-              <dt>Manifest hash</dt>
+              <dt>{t("dataset.manifestHash")}</dt>
               <dd className="mono">{dataset.manifestHash}</dd>
             </div>
           </dl>

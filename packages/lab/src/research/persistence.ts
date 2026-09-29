@@ -11,6 +11,7 @@ export type NotebookPersistence = Pick<
   | "listMessages"
   | "listTurns"
   | "activeTurn"
+  | "modelUsage"
   | "updateSummary"
 >;
 export interface LaboratoryPersistence {
@@ -26,7 +27,11 @@ export interface DatasetPersistence {
   research: Pick<ResearchRepository, "get" | "datasetVersion">;
   files: Pick<
     ResearchFiles,
-    "registerDataset" | "getDataset" | "readDatasetFile"
+    | "registerDataset"
+    | "importDatasetDirectory"
+    | "verifyDataset"
+    | "getDataset"
+    | "readDatasetFile"
   >;
 }
 export interface ExecutionPersistence {

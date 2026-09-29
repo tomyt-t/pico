@@ -1,4 +1,5 @@
 import { type ChildProcess, execFile, spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -35,6 +36,30 @@ async function describeProcess(
   pid: number,
 ): Promise<{ started: string; command: string; groupId: number } | undefined> {
   if (!pidExists(pid)) return undefined;
+  if (process.platform === "linux") {
+    try {
+      const [stat, command, bootId] = await Promise.all([
+        readFile(`/proc/${pid}/stat`, "utf8"),
+        readFile(`/proc/${pid}/cmdline`, "utf8"),
+        readFile("/proc/sys/kernel/random/boot_id", "utf8"),
+      ]);
+      // comm (field 2) may contain spaces and parentheses. Fields after its final ')'
+      // start at state (3), process group (5), and monotonic start ticks (22).
+      const fields = stat
+        .slice(stat.lastIndexOf(")") + 2)
+        .trim()
+        .split(/\s+/);
+      if (!fields[19] || !/^\d+$/.test(fields[2] ?? "")) return undefined;
+      return {
+        groupId: Number(fields[2]),
+        started: `proc:${bootId.trim()}:${fields[19]}`,
+        command: command.replaceAll("\0", " "),
+      };
+    } catch {
+      // A hidden/unreadable procfs must not silently turn into a PID-only identity.
+      return undefined;
+    }
+  }
   try {
     const { stdout } = await promisify(execFile)(
       "ps",
@@ -71,7 +96,7 @@ export async function captureIdentity(token: string): Promise<ProcessClaim> {
   const processInfo = await describeProcess(process.pid);
   if (!processInfo?.command.includes(token))
     throw new RunnerError(
-      "Cannot establish execution process identity",
+      `Cannot establish execution process identity (${process.platform === "linux" ? "readable procfs required" : "ps required"})`,
       "conflict",
     );
   return {
@@ -84,9 +109,23 @@ export async function captureIdentity(token: string): Promise<ProcessClaim> {
   };
 }
 
+export function localRunnerCapabilities() {
+  return {
+    platform: process.platform,
+    processIdentity:
+      process.platform === "linux" ? ("proc" as const) : ("ps" as const),
+    memoryLimit:
+      process.platform === "linux" ? ("address-space" as const) : null,
+    gpuSelection:
+      process.platform === "linux" ? ("cuda-visible-devices" as const) : null,
+    sandbox: false as const,
+  };
+}
+
 export async function inspectIdentity(
   claim: ProcessClaim,
 ): Promise<"alive" | "gone" | "unknown"> {
+  if (!validProcessClaim(claim)) return "unknown";
   if (!pidExists(claim.pid)) return "gone";
   const info = await describeProcess(claim.pid);
   if (
@@ -97,6 +136,26 @@ export async function inspectIdentity(
   )
     return "unknown";
   return "alive";
+}
+
+export function validProcessClaim(claim: unknown): claim is ProcessClaim {
+  if (!claim || typeof claim !== "object") return false;
+  const value = claim as Partial<ProcessClaim>;
+  return (
+    value.version === 1 &&
+    typeof value.pid === "number" &&
+    Number.isSafeInteger(value.pid) &&
+    value.pid > 0 &&
+    typeof value.groupId === "number" &&
+    Number.isSafeInteger(value.groupId) &&
+    value.groupId > 0 &&
+    typeof value.token === "string" &&
+    value.token.length > 0 &&
+    typeof value.started === "string" &&
+    value.started.length > 0 &&
+    typeof value.createdAt === "string" &&
+    Number.isFinite(Date.parse(value.createdAt))
+  );
 }
 
 /** No signalling of recorded PIDs: only the living watchdog signals its own group. */

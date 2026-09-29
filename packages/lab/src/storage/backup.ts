@@ -1,18 +1,22 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
+  closeSync,
+  constants,
   copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
+  readSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { executionControlFiles } from "@pico/runner";
-import { canonicalJson, hash } from "@/lab/storage/canonical-json";
+import { canonicalJson } from "@/lab/storage/canonical-json";
 import { DatabaseConnection } from "@/lab/storage/database";
 import { StorageConflict } from "@/lab/storage/errors";
 
@@ -173,7 +177,7 @@ function copyTree(
       copyTree(join(source, entry), join(destination, entry), skip);
   } else if (stat.isFile()) {
     mkdirSync(dirname(destination), { recursive: true });
-    copyFileSync(source, destination);
+    copyFileSync(source, destination, constants.COPYFILE_FICLONE);
   } else {
     throw new StorageConflict(
       "Research backups cannot contain symlinks or special files",
@@ -188,11 +192,11 @@ function manifestFiles(root: string): BackupManifest["files"] {
     if (stat.isDirectory()) {
       for (const entry of readdirSync(path).sort()) visit(join(path, entry));
     } else if (stat.isFile()) {
-      const bytes = readFileSync(path);
+      const content = hashFile(path);
       files.push({
         path: relative(root, path).split(sep).join("/"),
-        sha256: hash(bytes),
-        bytes: bytes.length,
+        sha256: content.sha256,
+        bytes: content.bytes,
       });
     } else
       throw new StorageConflict(
@@ -201,6 +205,25 @@ function manifestFiles(root: string): BackupManifest["files"] {
   };
   visit(root);
   return files;
+}
+
+/** Backups may contain multi-GiB dataset files; preserve exact bytes with bounded memory. */
+function hashFile(path: string): { sha256: string; bytes: number } {
+  const descriptor = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const hash = createHash("sha256");
+    const chunk = Buffer.alloc(1024 * 1024);
+    let bytes = 0;
+    for (;;) {
+      const length = readSync(descriptor, chunk, 0, chunk.length, bytes);
+      if (!length) break;
+      hash.update(chunk.subarray(0, length));
+      bytes += length;
+    }
+    return { sha256: hash.digest("hex"), bytes };
+  } finally {
+    closeSync(descriptor);
+  }
 }
 
 const operationalIdentity = new Set<string>(executionControlFiles);

@@ -3,6 +3,7 @@ import type { JsonObject } from "@/lab/contracts";
 import { registerExperimentTools } from "@/lab/pico/tools/experiment-tools";
 import { registerLibraryTools } from "@/lab/pico/tools/library-tools";
 import { registerNotebookTools } from "@/lab/pico/tools/notebook-tools";
+import { boundedOutput } from "@/lab/pico/tools/output";
 import { registerResearchTools } from "@/lab/pico/tools/research-tools";
 import type { Tool, ToolScope } from "@/lab/pico/tools/tool-definition";
 import type { Research } from "@/lab/research/laboratory";
@@ -25,7 +26,8 @@ export function createTools(
         name,
         description,
         parameters: parameters as JsonObject,
-        execute: async (input, ctx) => execute(schema.parse(input), ctx),
+        execute: async (input, ctx) =>
+          boundedOutput(await execute(schema.parse(input), ctx), name),
       });
     },
   };

@@ -56,6 +56,9 @@ export function snapshotProjection(manifest: SnapshotManifest): RunSnapshot {
     })),
     environment: manifest.environment,
     createdAt: manifest.createdAt,
+    ...(manifest.request.resources && {
+      resources: manifest.request.resources,
+    }),
   };
 }
 export function artifact(file: FileDigest): Artifact {

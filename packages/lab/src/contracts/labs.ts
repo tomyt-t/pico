@@ -7,6 +7,9 @@ export interface LabSettings {
   maxRunSeconds: number;
   maxConcurrentRuns: number;
   maxModelSteps: number;
+  /** Observed usage per work block; continuing grants a new block. Not a prepaid cap. */
+  maxModelTokens?: number | null;
+  maxModelCostUsd?: number | null;
   provider: ProviderConfig;
 }
 
@@ -32,6 +35,14 @@ export const settingsSchema = z
     maxRunSeconds: z.number().int().min(1).max(86_400),
     maxConcurrentRuns: z.number().int().min(1).max(16),
     maxModelSteps: z.number().int().min(1).max(100),
+    maxModelTokens: z
+      .number()
+      .int()
+      .min(1)
+      .max(100_000_000)
+      .nullable()
+      .optional(),
+    maxModelCostUsd: z.number().positive().max(100_000).nullable().optional(),
     provider: z
       .object({
         mode: z.enum(["demo", "pi", "openai-compatible"]),

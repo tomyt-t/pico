@@ -211,7 +211,10 @@ test("one durable conversation can read a source and save it to Library; restart
           ],
         };
       if (step === 2) {
-        const last = messages.at(-1);
+        // The live laboratory index follows stable history for prompt caching.
+        const last = [...messages]
+          .reverse()
+          .find((message) => message.tool_call_id === "read-web");
         expect(last?.role).toBe("tool");
         const read = JSON.parse(last?.content ?? "{}") as Response;
         const text = read.result.content.map((part) => part.text).join("\n");

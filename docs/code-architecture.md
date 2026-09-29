@@ -88,7 +88,8 @@ apps/web/src/
     http-client.ts                Transporte e erros
     use-poll.ts                   Visibilidade, polling e dados desatualizados
     use-mutation.ts               Intenção, retry e chave idempotente
-  components/                     Markdown, formulários e elementos comuns
+  components/                     Markdown, formulários, elementos comuns e i18n
+    locales/                      Dicionários pt-BR (forma e tipos) e en
   styles/                         Tokens, base, shell e responsividade
   features/
     chat/                         Conversa, rascunhos, mensagens e composição
@@ -158,6 +159,7 @@ packages/lab/src/
       experiment-tools.ts
       library-tools.ts
       notebook-tools.ts
+      output.ts                     Páginas UTF-8/fingerprint e limite de resposta
   models/
     model-contract.ts             Porta de inferência e envelope nativo opaco
     model-gateway.ts              Composição e lifecycle dos provedores
@@ -283,7 +285,7 @@ de controle não são restaurados como processos ativos.
 | Entidades, relações, revisões e projeções científicas | `research` via repositórios de storage |
 | Lab e conversa inicial | Uma transação de `research/labs` |
 | Turnos, mensagens, calls e replay | `pico` via conversation-repository |
-| Resumo/checkpoint | Operação atômica restrita do notebook |
+| Resumo/checkpoint | Notebook para resumo manual; Pico para checkpoint extrativo; gravação atômica em conversation-repository |
 | Run terminal e evento de conclusão | Mesma transação científica |
 | Consumo de evento e criação de turno | Mesma transação da conversa |
 | Datasets e workspace editável | `storage/research-files`, solicitado por research |
@@ -304,6 +306,28 @@ Novas respostas nativas usam `{format, version, payload}` opaco. O adaptador Pi
 lê também as respostas antigas sem envelope; não reconstrói reasoning ou calls
 a partir do texto público. Histórico de UI é limitado e paginado; o contexto
 nativo consulta grupos completos de turnos, incluindo uma retomada longa.
+`context.ts` aplica os cursores do resumo e da compactação, preserva pedidos
+recentes do pesquisador e coloca o índice mutável depois do histórico. Ao exceder
+o orçamento, grava trechos verificáveis e IDs dos grupos omitidos, mantendo os
+originais. Nem uma resposta assinada maior que o contexto pode forçar seu reenvio
+sem limite. Resultados de tools têm projeção limitada; o payload nativo assinado
+não é reescrito para caber.
+
+`pico/tools/output.ts` limita respostas a 24 KB e expõe páginas por offset UTF-8.
+O fingerprint da primeira página é obrigatório nas continuações e rejeita uma
+origem alterada. `read_turn` pagina o conjunto estável `eventRuns`, além de
+permitir ler os metadados de um turno. A agregação de eventos e todos os IDs de
+deduplicação pertencem à transação de `conversation-repository`; novos eventos
+só entram em turnos ainda queued. Eventos legados com role system são projetados
+como dados user no replay, mantendo seus bytes originais.
+
+`ModelUsage` é projeção do uso observado nos registros `model_step`, sem expor
+transcritos privados. Turnos e conversa oferecem uso acumulado e indicadores de
+preço/tokens desconhecidos. `turn.ts` verifica o bloco de passos/tokens/custo
+antes de chamar o modelo e reduz o orçamento de contexto persistido em resposta
+a overflow. O adaptador sanitiza a classificação do erro sem armazenar o corpo
+arbitrário do provedor. Uma resposta truncada da API compatível preserva o uso
+informado mesmo quando suas tools são recusadas.
 
 ## Evidências e compatibilidade
 

@@ -22,11 +22,20 @@ export function conversationView(
   labId: string,
 ): ConversationView {
   const conversation = getConversation(context, labId);
+  const page = context.conversations.listMessages(labId, { limit: 201 });
+  const messages = page.slice(-200);
   return {
     conversation,
-    messages: context.conversations.listMessages(labId, { limit: 200 }),
+    messages,
     turns: context.conversations.listTurns(labId),
     activeTurn: context.conversations.activeTurn(labId),
+    usage: context.conversations.modelUsage(labId),
+    history: { hasMore: page.length > 200, before: messages[0]?.id ?? null },
+    resumableTurns: context.conversations
+      .listTurns(labId)
+      .filter((turn) =>
+        ["paused", "failed", "interrupted", "cancelled"].includes(turn.status),
+      ),
   };
 }
 export function readHistory(

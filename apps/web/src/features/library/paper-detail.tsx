@@ -1,6 +1,7 @@
 import type { LabOverview, Paper } from "@pico/lab/contracts";
 import { routePath } from "@/web/app/navigation";
-import { timestamp } from "@/web/components/format";
+import { author, timestamp } from "@/web/components/format";
+import { useTranslation } from "@/web/components/i18n";
 import { Markdown } from "@/web/components/markdown";
 import { Empty, PageHeading, Section } from "@/web/components/primitives";
 import { externalLink } from "@/web/features/library/external-link";
@@ -14,13 +15,14 @@ export function PaperDetail({
   overview: LabOverview;
   discuss: (text: string) => void;
 }) {
+  const { t } = useTranslation();
   const used = overview.conclusions.filter((conclusion) =>
     conclusion.paperIds.includes(paper.id),
   );
   return (
     <>
       <PageHeading
-        eyebrow="Library · paper"
+        eyebrow={t("paper.eyebrow")}
         title={paper.title}
         action={
           <button
@@ -28,46 +30,44 @@ export function PaperDetail({
             type="button"
             onClick={() =>
               discuss(
-                `Read paper ${paper.id}: ${paper.title}. Help me understand how it relates to our research questions.`,
+                t("paper.readPrompt", { id: paper.id, title: paper.title }),
               )
             }
           >
-            Discuss with Pico
+            {t("common.discussWithPico")}
           </button>
         }
       >
         {paper.authors.join(", ")}
       </PageHeading>
       <div className="grid-main">
-        <Section title="Source text">
+        <Section title={t("paper.sourceText")}>
           {paper.text ? (
             <div className="paper-text">
               <Markdown>{paper.text}</Markdown>
             </div>
           ) : (
-            <Empty title="No source text available">
-              This record does not contain the paper's text.
-            </Empty>
+            <Empty title={t("paper.noText")}>{t("paper.noTextBody")}</Empty>
           )}
         </Section>
         <aside className="stack">
-          <Section title="Provenance">
+          <Section title={t("paper.provenance")}>
             <dl className="details-grid">
               <div>
-                <dt>Source</dt>
-                <dd>{paper.source || "Not recorded"}</dd>
+                <dt>{t("common.source")}</dt>
+                <dd>{paper.source || t("common.notRecorded")}</dd>
               </div>
               <div>
-                <dt>Identifier</dt>
-                <dd>{paper.identifier || "Not recorded"}</dd>
+                <dt>{t("paper.identifier")}</dt>
+                <dd>{paper.identifier || t("common.notRecorded")}</dd>
               </div>
               <div>
-                <dt>Added</dt>
+                <dt>{t("paper.added")}</dt>
                 <dd>{timestamp(paper.createdAt)}</dd>
               </div>
               <div>
-                <dt>Authorship</dt>
-                <dd>{paper.author.kind}</dd>
+                <dt>{t("paper.authorship")}</dt>
+                <dd>{author(paper.author.kind)}</dd>
               </div>
             </dl>
             {externalLink(paper.url) && (
@@ -77,12 +77,12 @@ export function PaperDetail({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Open original source ↗
+                  {t("paper.openSource")}
                 </a>
               </p>
             )}
           </Section>
-          <Section title="Referenced by conclusions">
+          <Section title={t("paper.citedBy")}>
             {used.length ? (
               used.map((conclusion) => (
                 <p key={conclusion.id}>
@@ -98,9 +98,7 @@ export function PaperDetail({
                 </p>
               ))
             ) : (
-              <p className="meta">
-                No recorded conclusion cites this paper yet.
-              </p>
+              <p className="meta">{t("paper.notCited")}</p>
             )}
           </Section>
         </aside>

@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
+import { browserPolicy } from "@/server/http/browser-policy";
 
 const dataDir = resolve(
   process.env.PICO_DATA_DIR || join(homedir(), ".local", "share", "pico"),
@@ -44,9 +45,10 @@ try {
       if (path !== dist && !path.startsWith(`${dist}${sep}`))
         return new Response("Not found", { status: 404 });
       const file = Bun.file(path);
-      if (path !== dist && (await file.exists())) return new Response(file);
+      if (path !== dist && (await file.exists()))
+        return browserPolicy(new Response(file));
       const index = Bun.file(join(dist, "index.html"));
-      if (await index.exists()) return new Response(index);
+      if (await index.exists()) return browserPolicy(new Response(index));
       return new Response(
         "Pico API is ready. Run bun run dev and open http://127.0.0.1:5174, or bun run build to serve the UI here.",
       );

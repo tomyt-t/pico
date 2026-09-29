@@ -44,6 +44,12 @@ export interface DatasetRegistration {
   splits?: Record<string, number>;
   files: FileContentInput[];
 }
+/** Researcher-only local import. The source directory is not copied into scientific manifests. */
+export interface DatasetDirectoryRegistration
+  extends Omit<DatasetRegistration, "files"> {
+  directory: string;
+  limits?: { maxFileBytes?: number; maxTreeBytes?: number; maxFiles?: number };
+}
 
 export const fileSchema = z
   .object({

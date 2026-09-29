@@ -2,8 +2,15 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type {
+  DatasetDirectoryRegistration,
+  MutationContext,
+} from "@/lab/contracts";
 import { preparePiProfile } from "@/lab/models/pi-profile";
-import { backupLaboratory } from "@/lab/runtime/backup";
+import {
+  backupLaboratory,
+  importDatasetDirectoryOffline,
+} from "@/lab/runtime/backup";
 import { picoPaths } from "@/lab/runtime/paths";
 import { defaultWebConfig } from "@/lab/sources/web-config";
 import { ResearchBackup } from "@/lab/storage/backup";
@@ -19,6 +26,17 @@ export function createBackup(dataDir: string, destination: string) {
     key: randomUUID(),
     actor: { kind: "researcher" },
   });
+}
+/** An offline local import must not dispatch pending experiments or model turns. */
+export async function importDatasetDirectory(
+  dataDir: string,
+  labId: string,
+  input: DatasetDirectoryRegistration,
+  context: MutationContext,
+) {
+  if (!existsSync(join(dataDir, "pico.sqlite")))
+    throw new Error(`No laboratory database at ${dataDir}`);
+  return importDatasetDirectoryOffline(dataDir, labId, input, context);
 }
 export function preparePiCli(dataDir?: string, piAgentDir?: string) {
   const { agentDir } = picoPaths(dataDir, piAgentDir);

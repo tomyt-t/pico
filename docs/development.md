@@ -74,6 +74,42 @@ Novas abstrações e pacotes devem responder a um consumidor ou cenário concret
 As possibilidades de produto após M5 continuam no fim deste documento; a próxima
 capacidade será escolhida a partir do uso do laboratório.
 
+## Estabilização — Conversas extensas e análise de lotes (29/09/2026)
+
+Entrega implementada após as duas análises do produto, com desenho contestado
+por subagentes e duas rodadas adversariais sobre a implementação. O relatório
+integrado da estabilização registra a validação final das demais frentes.
+
+- [x] Limitar todas as respostas de tools; oferecer páginas UTF-8 verificadas por
+  fingerprint e metadados para binários.
+- [x] Aplicar checkpoints duráveis sem cortar batches assinados, pedidos queued
+  não vistos ou tools pendentes; conservar histórico e recibos originais.
+- [x] Reduzir o contexto após overflow do provedor sem reenviar indefinidamente
+  o mesmo conteúdo excessivo.
+- [x] Agregar eventos de um lote, preservar todas as referências a runs e impedir
+  reanálise duplicada mesmo quando um evento secundário é reentregue.
+- [x] Tratar observações de execução como dados no modelo e manter a autoria
+  identificável na UI; priorizar pedidos do pesquisador na fila.
+- [x] Expor consumo observado por turno/laboratório e pausa por passos, tokens
+  ou custo, distinguindo uso/preço desconhecidos.
+- [x] Orientar Pico sobre baseline, controles, amostragem, confundidores e critérios
+  anteriores à execução; informar a data atual fora das instruções estáveis.
+
+O aceite usa providers simulados/transporte HTTP local para replay, orçamento,
+erro de contexto e recuperações. O cenário de demonstração executa Python real.
+A fixture histórica permanece intacta. Esses testes não demonstram raciocínio
+de um modelo externo nem suporte operacional a outro sistema. Compactação é
+extrativa, e o limite financeiro usa consumo informado depois da chamada; nenhuma
+dessas capacidades representa uma garantia de memória sem perdas ou gasto pré-pago.
+
+A entrega integrada também concluiu integridade científica, revisões de evidência,
+diagnóstico/reparo do runner, segurança do navegador, Pi opt-in por experimento,
+datasets grandes em streaming, limites Linux e melhorias de UI. Aceite final:
+**248 testes e 1.521 assertions**, TypeScript, lint e build aprovados. Runner
+executado em Linux sem ps; GLM 5.3 validou o ciclo com 25 chamadas reais e backup
+restaurável. Detalhes, rodadas adversariais, custo e limites em
+[stabilization-2026-09.md](stabilization-2026-09.md).
+
 ## M1 — Laboratório durável
 
 Entregar:

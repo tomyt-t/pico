@@ -52,7 +52,8 @@ It does **not** contain hostile code that escapes the group or guarantee cleanup
 after isolated death of the watchdog itself. Ambiguous identities/groups keep
 capacity occupied and block new dispatch and backup. Tests demonstrate this
 limitation explicitly. The local backend requires Bun, Python and POSIX process
-groups/`ps` (macOS or Linux); uv is needed for uv experiments.
+groups. Linux identities use readable procfs (boot ID and process start ticks);
+macOS uses `ps`. Missing identity information fails closed. uv is needed for uv experiments.
 
 Legacy `interrupted` records with an old PID-only claim also remain unknown:
 that status did not prove that experimental descendants had stopped. Their
@@ -62,6 +63,54 @@ records are preserved, but backup and archive export require verified terminatio
 must not restore those files or `.pico-runner-owner.sqlite*` as authority to
 control old processes. Archives contain terminal attempts and never execute on
 import. The lab's restore path rejects active/inconsistent historical backups.
+
+## Operational recovery
+
+`inventory()` includes `issues` for unreadable execution records, snapshot
+manifests or failed scientific observation delivery, and `recoveredPublications` for staging directories preserved under
+`labs/<lab>/run-recovery`. Corruption keeps dispatch and backup blocked while
+the application remains available for diagnosis. Startup moves an orphaned
+`.pending-*` directory only under the coordinator lock and only when it contains
+no process-control evidence; a receipt records its origin and metadata hashes.
+These preserved directories belong in research backups.
+
+`repairExecution(labId, runId)` rechecks the existing attempt. It can reconstruct
+a damaged record from an intact snapshot or resolve a dispatch whose supervisor
+is proven gone. The original record is retained and the outcome is interrupted,
+never invented success. Incomplete claims, a missing supervisor identity on an
+admitted run, or a living/uncertain process group remain blocked. This action is
+not an operator override of termination evidence.
+
+Disposable `work/` directories (including virtual environments) are removed
+automatically after terminal observation and independent lifetime verification;
+`cleanupWorkOnCompletion: false` retains them. `cleanupWork(labId, runId)` offers
+the same checked cleanup explicitly. Snapshots, outputs and logs remain intact.
+Cancellation, timeout and supervisor loss send SIGTERM, allow a short 200 ms
+flush interval, then SIGKILL; an independent 350 ms bound applies even if IO stalls.
+
+## Input sizes and local resources
+
+`fileAccess.hashFile`, `listFiles` and `copyVerified` stream file hashes in 1 MiB
+chunks. Verified copies use CoW cloning when available and never hard links.
+`datasetLimits` configures snapshot input limits independently of code/output
+limits. Pico local directory imports use `fileAccess.LOCAL_DATASET_LIMITS`
+(1 GiB per file, 16 GiB total, 2,000 files); small JSON uploads retain the
+8 MiB per-file / 128 MiB total limits. The v1 JSON run archive also retains its
+small-file limits: use the streamed research backup for larger datasets.
+
+`environmentBindings` may be a resolver called with each preserved `RunRequest`;
+resolved environment values remain transient. Resolution failure produces a
+failed attempt before any supervisor is reserved and does not include secret
+exception text in the record.
+
+Optional request `resources` are preserved in the snapshot. On Linux,
+`memoryMiB` sets RLIMIT_AS for each process and inherited children, not an
+aggregate RSS/cgroup limit. `gpuDevices` selects numeric CUDA devices through
+CUDA_VISIBLE_DEVICES; an empty array hides CUDA devices. It neither allocates
+hardware nor guarantees device availability, isolation or GPU memory limits.
+Unsupported host settings are rejected before publication; reading/recovering
+historical records does not require their execution platform.
+`localRunnerCapabilities()` discloses these platform limits and `sandbox: false`.
 
 ## Verification
 

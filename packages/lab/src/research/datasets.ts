@@ -1,4 +1,5 @@
 import type {
+  DatasetDirectoryRegistration,
   DatasetRegistration,
   DatasetVersion,
   MutationContext,
@@ -51,6 +52,66 @@ export function createDatasetOperations(
   effects: EffectCoordinator,
 ) {
   return {
+    async importDatasetDirectory(
+      labId: string,
+      input: DatasetDirectoryRegistration,
+      ctx: MutationContext,
+    ): Promise<DatasetVersion> {
+      lab.getLab(labId);
+      if (ctx.actor.kind !== "researcher")
+        throw new LabError(
+          "BAD_REQUEST",
+          "Only the researcher may import local dataset directories",
+        );
+      // Validate scientific metadata before publishing filesystem effects.
+      parse(datasetSchema.omit({ files: true, manifestHash: true }), {
+        name: input.name,
+        version: input.version,
+        description: input.description,
+        source: input.source,
+        license: input.license,
+        splits: input.splits,
+      });
+      return effects.run(
+        labId,
+        "importDatasetDirectory",
+        input,
+        ctx,
+        async (id) => {
+          const existing = storage.research.datasetVersion(
+            labId,
+            input.name,
+            input.version,
+          );
+          if (existing && existing.id !== id)
+            throw new LabError(
+              "CONFLICT",
+              "This dataset version already exists; register a new version to change its contents",
+            );
+          const preserved = datasetVersion(
+            await storage.files.importDatasetDirectory({
+              ...input,
+              labId,
+              id,
+              license: input.license || "unknown",
+              author: ctx.actor,
+            }),
+          );
+          const {
+            author: _author,
+            labId: _labId,
+            revision: _revision,
+            createdAt: _createdAt,
+            updatedAt: _updatedAt,
+            ...fields
+          } = preserved;
+          return lab.registerDataset(labId, fields, {
+            ...ctx,
+            key: `${ctx.key}:record`,
+          });
+        },
+      );
+    },
     async registerDataset(
       labId: string,
       input: DatasetRegistration,
@@ -125,9 +186,8 @@ export async function recoverDatasetPublication(
       return undefined;
     throw error;
   }
-  // Read every published file through the verified data boundary before accepting the record.
-  for (const file of manifest.files)
-    await storage.files.readDatasetFile(labId, id, file.path);
+  // Hash every published file without buffering large local datasets during recovery.
+  await storage.files.verifyDataset(labId, id);
   const preserved = datasetVersion(manifest);
   const {
     author,

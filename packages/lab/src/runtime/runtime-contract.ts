@@ -1,4 +1,5 @@
 import type {
+  ExecutionStatus,
   MutationContext,
   PiCatalog,
   ProviderStatus,
@@ -29,6 +30,17 @@ export interface LabRuntime {
     test(labId: string): Promise<ProviderStatus>;
   };
   readonly administration: {
+    executionStatus(labId: string): Promise<ExecutionStatus>;
+    repairExecution(
+      labId: string,
+      runId: string,
+      context: MutationContext,
+    ): Promise<{ state: string; reason?: string }>;
+    cleanupWork(
+      labId: string,
+      runId: string,
+      context: MutationContext,
+    ): Promise<{ removed: boolean }>;
     backup(
       destination: string,
       context: MutationContext,

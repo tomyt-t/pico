@@ -5,6 +5,7 @@ export type {
   ConversationView,
   LabEvent,
   Message,
+  ModelUsage,
   ToolCallView,
   Turn,
   TurnStatus,
@@ -13,6 +14,7 @@ export type {
   Artifact,
   Criterion,
   DatasetInput,
+  ExecutionResources,
   Experiment,
   Metric,
   NewExperiment,
@@ -24,6 +26,7 @@ export type {
 export {
   artifactSchema,
   criterionSchema,
+  executionResourcesSchema,
   experimentSchema,
   metricSchema,
   runSchema,
@@ -34,6 +37,7 @@ export type { Json, JsonObject } from "@/lab/contracts/json";
 export type { CreateLabInput, Lab, LabSettings } from "@/lab/contracts/labs";
 export { labSchema, settingsSchema } from "@/lab/contracts/labs";
 export type {
+  DatasetDirectoryRegistration,
   DatasetRegistration,
   DatasetVersion,
   FileContentInput,
@@ -54,6 +58,7 @@ export type {
   ProviderConfig,
   ProviderStatus,
 } from "@/lab/contracts/models";
+export type { ExecutionStatus } from "@/lab/contracts/operations";
 export type {
   Actor,
   MutationContext,
@@ -90,4 +95,5 @@ export type {
   ExperimentDetail,
   LabOverview,
   LabStatus,
+  RecordReference,
 } from "@/lab/contracts/views";

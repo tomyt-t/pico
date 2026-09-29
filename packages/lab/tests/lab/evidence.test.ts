@@ -134,18 +134,19 @@ test("structured numerical claims must match a collected metric and its full ide
   );
   expect(result.evidenceVersion).toBe(1);
   expect(result.evidence).toEqual([f.reference]);
-  const hypothesis = f.lab.createHypothesis(
-    f.labId,
-    {
-      questionId: f.question.id,
-      statement: "Has measured accuracy",
-      status: "supported",
-      assessment: "Based on the cited metric",
-      resultIds: [result.id],
-    },
-    intent(),
-  );
-  expect(hypothesis.status).toBe("supported");
+  expect(() =>
+    f.lab.createHypothesis(
+      f.labId,
+      {
+        questionId: f.question.id,
+        statement: "Has measured accuracy",
+        status: "supported",
+        assessment: "Based on the cited metric",
+        resultIds: [result.id],
+      },
+      intent(),
+    ),
+  ).toThrow("Register a hypothesis and its criteria before execution");
 });
 test("failure analysis remains recordable but unsupported assertions cannot support a hypothesis", () => {
   const f = fixture();
@@ -178,7 +179,7 @@ test("failure analysis remains recordable but unsupported assertions cannot supp
       },
       intent(),
     ),
-  ).toThrow("structured references");
+  ).toThrow("Register a hypothesis and its criteria before execution");
   expect(() =>
     f.lab.recordResult(
       f.labId,
@@ -223,7 +224,7 @@ test("legacy results stay identifiable and revisions cannot cite a different exe
       .evidenceVersion,
   ).toBeUndefined();
 });
-test("completion consumption creates one turn and message, and notebook checkpoints atomically", () => {
+test("completion consumption creates one turn and message, and notebook checkpoints never cover queued observations", () => {
   const f = fixture();
   expect(f.storage.conversation.consumeCompletionEvents()).toHaveLength(1);
   expect(f.storage.conversation.consumeCompletionEvents()).toHaveLength(0);
@@ -231,7 +232,7 @@ test("completion consumption creates one turn and message, and notebook checkpoi
   expect(messages).toHaveLength(1);
   const context = intent();
   const summary = f.lab.updateSummary(f.labId, "Preserved conclusion", context);
-  expect(summary.summaryThroughMessageId).toBe(messages[0]?.id ?? null);
+  expect(summary.summaryThroughMessageId).toBeNull();
   expect(f.lab.updateSummary(f.labId, "Preserved conclusion", context)).toEqual(
     summary,
   );

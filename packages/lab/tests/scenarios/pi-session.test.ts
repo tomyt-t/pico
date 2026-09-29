@@ -420,3 +420,118 @@ function nativeOf(step?: ModelStep): AssistantMessage | undefined {
   if (native.role !== "assistant") throw new Error("Expected native assistant");
   return native;
 }
+
+test("a giant signed exchange is checkpointed as a whole after restart without rewriting its native bytes or repeating tools", async () => {
+  const f = await fixture();
+  const giant = nativeBatch();
+  const thinking = giant.content.find((block) => block.type === "thinking");
+  if (thinking?.type !== "thinking")
+    throw new Error("Missing thinking fixture");
+  thinking.thinking = "signed private state ".repeat(15_000);
+  f.faux.setResponses([giant]);
+  const turn = ask(f, "Keep the baseline and sample size fixed");
+  await waitUntil(() => f.turn(turn.id).status === "paused");
+  const original = JSON.stringify(
+    f.store.conversation.listModelSteps<ModelStep>(f.labId)[0]?.native,
+  );
+  await f.restart();
+  f.faux.setResponses([
+    (input) => {
+      expect(
+        input.messages.some((message) => message.role === "assistant"),
+      ).toBe(false);
+      expect(
+        input.messages.some((message) => message.role === "toolResult"),
+      ).toBe(false);
+      const text = JSON.stringify(input.messages);
+      expect(Buffer.byteLength(text)).toBeLessThan(100_000);
+      expect(text).toContain("Keep the baseline and sample size fixed");
+      expect(text).toContain("record-question");
+      expect(text).not.toContain("signed private state");
+      return fauxAssistantMessage(
+        "I can inspect the original messages without repeating the mutation.",
+      );
+    },
+  ]);
+  f.session.continue(f.labId, turn.id);
+  await waitUntil(() => f.turn(turn.id).status === "completed");
+  const checkpoint = f.lab.getConversation(f.labId).compaction;
+  expect(checkpoint?.throughMessageId).toBeTruthy();
+  expect(
+    JSON.stringify(
+      f.store.conversation.listModelSteps<ModelStep>(f.labId)[0]?.native,
+    ),
+  ).toBe(original);
+  expect(f.lab.overview(f.labId).questions).toHaveLength(1);
+  await f.restart();
+  expect(f.lab.getConversation(f.labId).compaction).toEqual(checkpoint);
+});
+
+test("legacy giant tool results are bounded in native replay while the signed assistant and original result remain intact", async () => {
+  const f = await fixture();
+  f.faux.setResponses([nativeBatch()]);
+  const turn = ask(f);
+  await waitUntil(() => f.turn(turn.id).status === "paused");
+  const toolMessage = f.store.conversation
+    .messagesForTurns(f.labId, [turn.id])
+    .find((message) => message.toolCall?.id === "inspect-lab");
+  if (!toolMessage?.toolCall) throw new Error("Missing tool message");
+  const hugeResult = { text: "\u0000漢🔬".repeat(70_000) };
+  f.store.conversation.saveMessage({
+    ...toolMessage,
+    toolCall: { ...toolMessage.toolCall, result: hugeResult },
+  });
+  const input = context(f.lab, f.turn(turn.id), f.store.conversation);
+  expect(Buffer.byteLength(JSON.stringify(input))).toBeLessThan(100_000);
+  const replayed = input.find(
+    (message) => message.tool_call_id === "inspect-lab",
+  );
+  expect(replayed?.content).toContain("Excerpt clipped");
+  expect(
+    JSON.stringify(
+      f.store.conversation
+        .messagesForTurns(f.labId, [turn.id])
+        .find((message) => message.id === toolMessage.id)?.toolCall?.result,
+    ),
+  ).toBe(JSON.stringify(hugeResult));
+  expect(
+    JSON.stringify(
+      input.find((message) => message.native?.payload.role === "assistant")
+        ?.native?.payload.content,
+    ),
+  ).toBe(JSON.stringify(nativeBatch().content));
+});
+
+test("automatic checkpoints stop before the assistant of a pending signed batch", async () => {
+  const f = await fixture();
+  f.faux.setResponses([nativeBatch()]);
+  const turn = ask(f);
+  await waitUntil(() => f.turn(turn.id).status === "paused");
+  const existing = f.store.conversation.messagesForTurns(f.labId, [turn.id]);
+  const pending = existing.find(
+    (message) => message.toolCall?.id === "inspect-lab",
+  );
+  if (!pending?.toolCall) throw new Error("Missing batch result");
+  f.store.conversation.saveMessage({
+    ...pending,
+    toolCall: { ...pending.toolCall, status: "running" },
+  });
+  for (let index = 0; index < 12; index++)
+    f.store.conversation.insertMessage({
+      id: randomUUID(),
+      labId: f.labId,
+      conversationId: turn.conversationId,
+      turnId: turn.id,
+      role: "assistant",
+      content: `Later persisted note ${index}: ${"x".repeat(14_000)}`,
+      createdAt: new Date().toISOString(),
+    });
+  context(f.lab, f.turn(turn.id), f.store.conversation);
+  const through = f.lab.getConversation(f.labId).compaction?.throughMessageId;
+  expect(through).toBe(existing[0]?.id);
+  expect(
+    existing
+      .filter((message) => message.modelStepId === pending.modelStepId)
+      .map((message) => message.id),
+  ).not.toContain(through);
+});

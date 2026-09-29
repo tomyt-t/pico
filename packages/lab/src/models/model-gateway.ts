@@ -5,7 +5,7 @@ import { createPiAdapter } from "@/lab/models/pi-adapter";
 import { createPiRuntime, type PiRuntime } from "@/lab/models/pi-runtime";
 
 export type { ModelAccess } from "@/lab/models/model-contract";
-export { replayGroups } from "@/lab/models/pi-adapter";
+export { replayEntries, replayGroups } from "@/lab/models/pi-adapter";
 
 export function createModelGateway(options: {
   agentDir: string;

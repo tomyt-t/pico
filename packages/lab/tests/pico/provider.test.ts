@@ -193,6 +193,27 @@ describe("OpenAI-compatible provider over local HTTP", () => {
     );
   });
 
+  test("context-window errors are classified without retaining the provider body", async () => {
+    await withProvider(
+      () =>
+        Response.json(
+          {
+            error: {
+              code: "context_length_exceeded",
+              message: `maximum context length exceeded; Authorization: Bearer ${syntheticKey}`,
+            },
+          },
+          { status: 400 },
+        ),
+      async (config) => {
+        const error = await rejection(() => ask(config));
+        expect(error.name).toBe("ModelContextOverflow");
+        expect(error.message).not.toContain(syntheticKey);
+        expect(error.message).not.toContain("Authorization");
+      },
+    );
+  });
+
   test("rejects truncated output even when its partial tool JSON happens to be valid", async () => {
     await withProvider(
       () =>
@@ -393,6 +414,41 @@ function contextFixture() {
 }
 
 describe("context supplied to a provider", () => {
+  test("manual summaries never cover an unseen queued request or a pending native group", () => {
+    const { store, lab, turn, message, record } = contextFixture();
+    const original = message({
+      role: "user",
+      content: "Keep the baseline fixed",
+    });
+    const queued = {
+      ...turn,
+      id: randomUUID(),
+      status: "queued" as const,
+      message: "New direction not yet seen",
+    };
+    store.conversation.insertTurn(queued);
+    message({ role: "user", content: queued.message, turnId: queued.id });
+    message({
+      role: "tool",
+      content: "",
+      toolCall: {
+        id: "pending-summary",
+        name: "update_summary",
+        arguments: { summary: "Old direction" },
+        status: "running",
+      },
+    });
+    const summary = lab.updateSummary(
+      record.id,
+      "Preserved previous decisions",
+      { key: randomUUID(), actor: { kind: "pico", turnId: turn.id } },
+    );
+    expect(summary.summaryThroughMessageId).toBeNull();
+    const input = context(lab, turn, store.conversation);
+    expect(JSON.stringify(input)).toContain(original.content);
+    expect(JSON.stringify(input)).not.toContain(queued.message);
+    expect(JSON.stringify(input)).not.toContain("pending-summary");
+  });
   test("reconstructs complete call/result pairs and keeps running calls out of model history", () => {
     const { store, lab, turn, message } = contextFixture();
     message({ role: "user", content: "Read the source" });
@@ -429,7 +485,7 @@ describe("context supplied to a provider", () => {
       },
     });
     const input = context(lab, turn, store.conversation);
-    const history = input.slice(2);
+    const history = input.slice(2, -1);
     expect(history.map((entry) => entry.role)).toEqual([
       "user",
       "assistant",
@@ -483,9 +539,9 @@ describe("context supplied to a provider", () => {
       turnId: queued.id,
     });
     const input = context(lab, turn, store.conversation);
-    const history = input.slice(2);
+    const history = input.slice(2, -1);
     expect(history.length).toBeGreaterThan(0);
-    expect(history.length).toBeLessThan(18);
+    expect(history.length).toBeLessThanOrEqual(18);
     expect(JSON.stringify(history).length).toBeLessThanOrEqual(100_000);
     expect(JSON.stringify(history)).toContain("Excerpt clipped");
     expect(JSON.stringify(history)).not.toContain(

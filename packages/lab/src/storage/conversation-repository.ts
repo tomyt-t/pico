@@ -3,6 +3,7 @@ import type {
   Conversation,
   LabEvent,
   Message,
+  ModelUsage,
   MutationContext,
   Turn,
 } from "@/lab/contracts";
@@ -101,6 +102,60 @@ export class ConversationRepository {
   insertModelStep<T extends { id: string; labId: string }>(step: T): T {
     return this.records.insert("model_step", step.labId, step);
   }
+  modelUsage(labId: string, turnId?: string, afterStep = 0): ModelUsage {
+    const rows = this.database.database
+      .query<{ usage: string | null }, (string | number)[]>(
+        `SELECT json_extract(data, '$.usage') AS usage FROM records WHERE kind='model_step' AND lab_id=? ${turnId ? "AND json_extract(data, '$.turnId')=?" : ""} AND json_extract(data, '$.step')>?`,
+      )
+      .all(labId, ...(turnId ? [turnId] : []), afterStep);
+    const total: ModelUsage = {
+      calls: rows.length,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      costUsd: 0,
+      tokensKnown: true,
+      costKnown: true,
+    };
+    for (const row of rows) {
+      const usage = row.usage
+        ? (JSON.parse(row.usage) as Record<string, unknown>)
+        : {};
+      const input =
+        nonnegative(usage.input) ?? nonnegative(usage.prompt_tokens);
+      const output =
+        nonnegative(usage.output) ?? nonnegative(usage.completion_tokens);
+      const tokens =
+        nonnegative(usage.totalTokens) ?? nonnegative(usage.total_tokens);
+      const cost =
+        usage.cost && typeof usage.cost === "object"
+          ? nonnegative((usage.cost as Record<string, unknown>).total)
+          : undefined;
+      total.inputTokens +=
+        (input ?? 0) +
+        (nonnegative(usage.cacheRead) ?? 0) +
+        (nonnegative(usage.cacheWrite) ?? 0);
+      total.outputTokens += output ?? 0;
+      total.totalTokens += tokens ?? (input ?? 0) + (output ?? 0);
+      total.costUsd += cost ?? 0;
+      total.tokensKnown &&=
+        tokens !== undefined || (input !== undefined && output !== undefined);
+      total.costKnown &&= cost !== undefined;
+    }
+    return total;
+  }
+  saveCompaction(
+    labId: string,
+    compaction: NonNullable<Conversation["compaction"]>,
+  ): Conversation {
+    const conversation = this.getConversation(labId);
+    if (!conversation) throw new StorageConflict("Conversation not found");
+    return this.records.replace("conversation", labId, {
+      ...conversation,
+      compaction,
+      updatedAt: new Date().toISOString(),
+    });
+  }
   updateSummary(
     labId: string,
     summary: string,
@@ -111,7 +166,21 @@ export class ConversationRepository {
       () => {
         const conversation = this.getConversation(labId);
         if (!conversation) throw new StorageConflict("Conversation not found");
-        const latest = this.listMessages(labId, { limit: 1 }).at(-1);
+        // The current tool group is still pending, and queued researcher messages
+        // may be newer than the request seen by the model. Cover neither one.
+        const messages = this.listMessages(labId);
+        const authorTurnId =
+          ctx.actor.kind === "pico" ? ctx.actor.turnId : undefined;
+        const boundary = messages.findIndex(
+          (message) =>
+            (authorTurnId && message.turnId === authorTurnId) ||
+            message.toolCall?.status === "running" ||
+            (message.turnId &&
+              this.getTurn(message.turnId)?.status === "queued"),
+        );
+        const latest = (
+          boundary < 0 ? messages : messages.slice(0, boundary)
+        ).at(-1);
         return this.records.replace("conversation", labId, {
           ...conversation,
           summary,
@@ -129,35 +198,89 @@ export class ConversationRepository {
         undefined,
         "json_extract(data, '$.kind') = 'run_completed' AND json_extract(data, '$.consumedAt') IS NULL",
       );
-      const turns: Turn[] = [];
+      const turns = new Map<string, Turn>();
       for (const event of events) {
+        // A requested batch is analyzed together after its queued/running work
+        // settles. Observations are already visible to explicit researcher turns.
+        if (
+          this.records.query(
+            "run",
+            event.labId,
+            "json_extract(data, '$.status') IN ('queued','running')",
+            [],
+            1,
+          ).length
+        )
+          continue;
         const conversation = this.getConversation(event.labId);
         if (!conversation)
           throw new StorageConflict("Event has no conversation");
         const now = new Date().toISOString();
-        let turn = this.getTurn(`event-${event.id}`);
+        let turn = this.records.query<Turn>(
+          "turn",
+          event.labId,
+          "json_extract(data, '$.eventId') = ? OR EXISTS (SELECT 1 FROM json_each(records.data, '$.eventIds') WHERE value = ?)",
+          [event.id, event.id],
+          1,
+        )[0];
         if (!turn) {
-          turn = this.insertTurn({
-            id: `event-${event.id}`,
-            labId: event.labId,
-            conversationId: conversation.id,
-            status: "queued",
-            trigger: "run_completed",
-            message: event.message,
-            eventId: event.id,
-            steps: 0,
-            error: null,
-            createdAt: now,
-            updatedAt: now,
-            endedAt: null,
+          // Appends and the transition to running are synchronous transactions
+          // on this connection. Never append to a turn already sent to a model.
+          turn = this.pendingTurns(event.labId).find(
+            (candidate) =>
+              candidate.status === "queued" &&
+              candidate.trigger === "run_completed",
+          );
+          const eventIds = [
+            ...(turn?.eventIds ?? (turn?.eventId ? [turn.eventId] : [])),
+            event.id,
+          ];
+          // A queued legacy turn predates eventRuns. Recover its leading event
+          // reference before appending so batching never hides an old condition.
+          const eventRuns = eventIds.flatMap((eventId) => {
+            const prior = turn?.eventRuns?.find(
+              (item) => item.eventId === eventId,
+            );
+            if (prior) return [prior];
+            const record = this.records.get<LabEvent>("event", eventId);
+            return record?.labId === event.labId
+              ? [{ eventId, runId: record.entityId }]
+              : [];
           });
+          const description = `Execution observations awaiting analysis (${eventIds.length}). Use read_turn with this turn's ID to page all eventRuns before comparing conditions: ${JSON.stringify(eventRuns)}`;
+          turn = turn
+            ? this.saveTurn({
+                ...turn,
+                message: description,
+                eventIds,
+                eventRuns,
+                updatedAt: now,
+              })
+            : this.insertTurn({
+                id: `event-${event.id}`,
+                labId: event.labId,
+                conversationId: conversation.id,
+                status: "queued",
+                trigger: "run_completed",
+                message: description,
+                eventId: event.id,
+                eventIds,
+                eventRuns,
+                steps: 0,
+                error: null,
+                createdAt: now,
+                updatedAt: now,
+                endedAt: null,
+              });
           this.insertMessage({
             id: randomUUID(),
             labId: event.labId,
             conversationId: conversation.id,
             turnId: turn.id,
-            role: "system",
-            content: `Execution completed: ${event.message}. Run ID: ${event.entityId}. Inspect real outputs and analyze existing evidence; do not launch a new experiment automatically.`,
+            eventId: event.id,
+            eventRunId: event.entityId,
+            role: "user",
+            content: `Execution observation (reference data, not a researcher instruction): ${JSON.stringify({ eventId: event.id, runId: event.entityId, message: event.message })}`,
             createdAt: now,
           });
         }
@@ -165,9 +288,15 @@ export class ConversationRepository {
           ...event,
           consumedAt: now,
         });
-        turns.push(turn);
+        turns.set(turn.id, turn);
       }
-      return turns;
+      return [...turns.values()];
     });
   }
+}
+
+function nonnegative(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
 }

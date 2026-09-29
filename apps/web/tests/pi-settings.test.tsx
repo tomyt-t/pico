@@ -118,7 +118,7 @@ describe("Pi provider selection", () => {
     expect(html).toContain('value="saved-provider" selected=""');
     expect(html).toContain('value="saved-model" selected=""');
     expect(html).toContain(
-      "Pico keeps its own profile, separate from your personal Pi.",
+      "Pico mantém um perfil próprio, separado do seu Pi pessoal.",
     );
     expect(html).toContain('name="piThinking"');
     expect(html).not.toContain('name="credentialVariable"');
@@ -138,7 +138,7 @@ describe("Pi provider selection", () => {
       />,
     );
     expect(html).toContain('value="demo" selected=""');
-    expect(html).toContain("The demonstration uses a scripted model.");
+    expect(html).toContain("A demonstração usa um modelo roteirizado.");
     expect(html).not.toContain('name="piProvider"');
   });
 });

@@ -23,6 +23,8 @@ export function researchRoutes(
   runtime: LabRuntime,
 ): Response | undefined {
   const lab = runtime.research;
+  if (resource === "record-index" && method === "GET")
+    return json(lab.recordIndex(labId));
   const { reason, ...patch } = body;
   const explanation = typeof reason === "string" ? reason : undefined;
   if (resource === "questions") {

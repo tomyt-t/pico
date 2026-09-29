@@ -191,3 +191,66 @@ de contenção. Estado ambíguo bloqueia operações. Shutdown gracioso aguarda 
 HTTP aceitos até EOF; não foi introduzido um prazo global para essa drenagem.
 O subpath de contratos isola código/tipos, não a instalação das dependências do
 lab. Ver [validation.md](validation.md) para resultados finais.
+
+## Estabilização de contexto e conversa — 29/09/2026
+
+O pesquisador autorizou corrigir os achados dos relatórios e pediu subagentes
+com rodadas adversariais. A divisão foi integridade científica, execução,
+contexto durável e coordenação/UI/API. Esta seção registra os contraexemplos da
+conversa; o relatório integrado da estabilização reúne as demais frentes e seus
+limites de validação.
+
+### Desenho — duas rodadas
+
+| Ataque ao desenho | Decisão |
+| --- | --- |
+| Uma tool devolve binário ou milhares de eventos, e continuar repete o overflow | Teto serializado de resposta, páginas com continuação e clipping também no replay legado; resposta nativa gigante sai inteira da projeção, mantendo os bytes preservados |
+| Atualizar resumo avança até um pedido recém-enfileirado que o modelo nunca viu | Cursor e resumo na mesma transação, limitados a prefixo anterior ao turno autor, às mensagens queued não vistas e aos grupos pending |
+| Cortar só um resultado de tool quebra a assinatura ou deixa respostas órfãs | Seleção por grupos completos; só resultados projetados são abreviados, nunca o assistant assinado |
+| Dez runs geram dez análises e empurram o pesquisador para fora da janela | Análise automática do lote após queued/running terminarem, fila com prioridade researcher e retenção explícita de seus pedidos recentes |
+| Um custo ausente é tratado como zero e o orçamento nunca pausa | Flags de preço/tokens conhecidos; ao configurar uma unidade não informada, parar antes da próxima inferência |
+
+### Implementação — rodada 1
+
+| Contraexemplo encontrado | Correção e regressão |
+| --- | --- |
+| Reentregar o segundo evento de um grupo não encontra o turno pelo ID líder e cria outra análise | Buscar `eventId` e todos os `eventIds`, independentemente do estado; teste reentrega evento secundário após restart e mantém uma análise/mensagem |
+| Um lote maior que o índice recente perde os primeiros run IDs | Guardar `eventRuns` completo e oferecer `read_turn` paginável; teste percorre 40 condições |
+| Página 2 de um registro revisado concatena bytes de versões diferentes | SHA-256 obrigatório nas continuações; testes alteram registro/arquivo entre páginas e verificam rejeição |
+| Acknowledgment abreviado de uma mutação perde o ID e induz repetição | Envelope conserva `operationCompleted` e `{kind,id}`; retry do mesmo recibo retorna o mesmo resultado com uma entidade |
+| Mudança de role dos eventos para user faz a UI atribuir o texto ao pesquisador | `Message.eventId` identifica a origem do laboratório; autoridade de instrução continua ausente no modelo |
+| Enviar mensagem e digitar durante POST apaga o novo rascunho ao receber resposta | Revisão cruzada identificou necessidade de comparar o rascunho atual ao texto enviado antes de limpá-lo |
+| Janela móvel de 200 mensagens abre uma lacuna após carregar histórico | Revisão cruzada identificou a necessidade de acumular a timeline carregada e atualizar mensagens por ID |
+
+### Implementação — rodada 2
+
+Um pending tool pode ter uma mensagem assistant antes de si. Parar o checkpoint
+na linha anterior à tool ainda cobria parte de seu batch. A correção recua até
+a primeira mensagem do mesmo `modelStepId`; a regressão cria histórico posterior
+grande e verifica que o cursor permanece anterior ao assistant pending.
+
+Outro ataque usa um turno queued legado, criado antes de existir `eventRuns`,
+e acrescenta uma condição nova. O agrupamento reconstrói a referência do evento
+original antes de acrescentar outras, mantendo a leitura paginada completa.
+As páginas reservam margem para JSON escapado e metadados; testes remontam
+UTF-8 com acentos, emoji e caracteres de controle sem perda de bytes.
+
+O último ataque força overflow mesmo no menor contexto permitido. Reduzir até
+um piso e deixar cada clique Continuar repetir a mesma chamada ainda manteria
+o problema original. O turno agora grava a identidade do provedor/modelo que
+rejeitou o contexto mínimo e não reenvia enquanto essa configuração permanecer.
+Uma troca de provedor/modelo permite retomar; o teste verifica zero chamadas
+adicionais no caso bloqueado e conclusão depois da troca.
+
+A revisão final da UI também simulou uma aba oculta durante mais de 200 mensagens.
+Juntar a janela nova à timeline antiga deixava um intervalo inacessível. O chat
+agora lê páginas até reencontrar a janela anterior antes de juntá-las; mantém
+um aviso e retry se houver falha. Os testes cobrem 900 mensagens com timestamps
+iguais, preservam a ordem do servidor e verificam que nenhuma timeline com buraco
+é publicada em erro de rede. O indicador de atividade compara o último ID,
+continuando a funcionar quando o tamanho da janela permanece em 200.
+
+Os testes de contexto usam Pi simulado e HTTP local. O ciclo de demonstração usa
+Python real; os testes de fixture verificam restore, replay e reprodução de uma
+pesquisa anterior sem modificar seus arquivos. Validação externa e de plataformas
+pertencem ao relatório integrado e não são inferidas desses cenários.

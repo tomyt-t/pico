@@ -1,6 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, mkdir, open, readdir, rename, rm } from "node:fs/promises";
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  rename,
+  rm,
+} from "node:fs/promises";
 import {
   basename,
   dirname,
@@ -14,6 +22,32 @@ import {
 export const MAX_FILE_BYTES = 8 * 1024 * 1024;
 export const MAX_TREE_BYTES = 128 * 1024 * 1024;
 export const MAX_TREE_FILES = 2_000;
+export interface FileLimits {
+  maxFileBytes: number;
+  maxTreeBytes: number;
+  maxFiles: number;
+}
+/** Local directory imports are streamed; JSON uploads and output collection keep smaller limits. */
+export const LOCAL_DATASET_LIMITS: Readonly<FileLimits> = Object.freeze({
+  maxFileBytes: 1024 * 1024 * 1024,
+  maxTreeBytes: 16 * 1024 * 1024 * 1024,
+  maxFiles: 2_000,
+});
+export function fileLimits(input: Partial<FileLimits> = {}): FileLimits {
+  const limits = {
+    maxFileBytes: MAX_FILE_BYTES,
+    maxTreeBytes: MAX_TREE_BYTES,
+    maxFiles: MAX_TREE_FILES,
+    ...input,
+  };
+  if (
+    Object.values(limits).some(
+      (value) => !Number.isSafeInteger(value) || value < 1,
+    )
+  )
+    throw new RunnerError("File limits must be positive safe integers");
+  return limits;
+}
 export interface FileDigest {
   path: string;
   bytes: number;
@@ -197,7 +231,49 @@ export async function readJson<T>(root: string, path: string): Promise<T> {
   return JSON.parse((await readBytes(root, path)).toString("utf8")) as T;
 }
 
-export async function listFiles(root: string): Promise<FileDigest[]> {
+/** Stream large datasets without allocating their declared size. */
+export async function hashFile(
+  root: string,
+  path: string,
+  limit = MAX_FILE_BYTES,
+): Promise<FileDigest> {
+  if (!Number.isSafeInteger(limit) || limit < 1)
+    throw new RunnerError("Invalid file limit");
+  const target = await checkedPath(root, path);
+  const handle = await open(
+    target,
+    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+  );
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) throw new RunnerError("Only regular files are allowed");
+    if (stat.size > limit) throw new RunnerError(`File exceeds ${limit} bytes`);
+    const hash = createHash("sha256");
+    const buffer = Buffer.alloc(Math.min(1024 * 1024, limit + 1));
+    let bytes = 0;
+    for (;;) {
+      const chunk = await handle.read(
+        buffer,
+        0,
+        Math.min(buffer.length, limit + 1 - bytes),
+        bytes,
+      );
+      if (!chunk.bytesRead) break;
+      bytes += chunk.bytesRead;
+      if (bytes > limit) throw new RunnerError(`File exceeds ${limit} bytes`);
+      hash.update(buffer.subarray(0, chunk.bytesRead));
+    }
+    return { path, bytes, sha256: hash.digest("hex") };
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function listFiles(
+  root: string,
+  options?: Partial<FileLimits>,
+): Promise<FileDigest[]> {
+  const limits = fileLimits(options);
   const files: FileDigest[] = [];
   let totalBytes = 0;
   let totalEntries = 0;
@@ -207,7 +283,7 @@ export async function listFiles(root: string): Promise<FileDigest[]> {
     for (const entry of await readdir(join(root, prefix), {
       withFileTypes: true,
     })) {
-      if (++totalEntries > MAX_TREE_FILES * 2)
+      if (++totalEntries > limits.maxFiles * 2)
         throw new RunnerError("Workspace contains too many entries");
       if (
         entry.name === ".venv" ||
@@ -222,11 +298,11 @@ export async function listFiles(root: string): Promise<FileDigest[]> {
         throw new RunnerError(`Symbolic link is not allowed: ${path}`);
       if (entry.isDirectory()) await walk(path, depth + 1);
       else {
-        const bytes = await readBytes(root, path);
-        totalBytes += bytes.length;
-        if (files.length >= MAX_TREE_FILES || totalBytes > MAX_TREE_BYTES)
+        const file = await hashFile(root, path, limits.maxFileBytes);
+        totalBytes += file.bytes;
+        if (files.length >= limits.maxFiles || totalBytes > limits.maxTreeBytes)
           throw new RunnerError("Workspace exceeds snapshot limits");
-        files.push({ path, bytes: bytes.length, sha256: digest(bytes) });
+        files.push(file);
       }
     }
   }
@@ -258,17 +334,53 @@ export async function copyVerified(
   source: string,
   destination: string,
   manifest?: FileDigest[],
+  options?: Partial<FileLimits>,
 ): Promise<FileDigest[]> {
-  const files = manifest ?? (await listFiles(source));
+  const limits = fileLimits(options);
+  const files = manifest ?? (await listFiles(source, limits));
+  if (
+    files.length > limits.maxFiles ||
+    files.reduce((sum, file) => sum + file.bytes, 0) > limits.maxTreeBytes
+  )
+    throw new RunnerError("Workspace exceeds snapshot limits");
   await mkdir(destination, { recursive: true });
   for (const file of files) {
-    const bytes = await readBytes(source, file.path);
-    if (bytes.length !== file.bytes || digest(bytes) !== file.sha256)
+    safeRelative(file.path);
+    if (
+      !Number.isSafeInteger(file.bytes) ||
+      file.bytes < 0 ||
+      file.bytes > limits.maxFileBytes
+    )
+      throw new RunnerError("Preserved file exceeds configured size limit");
+    const input = await checkedPath(source, file.path);
+    const sourceInfo = await lstat(input);
+    if (!sourceInfo.isFile() || sourceInfo.size > limits.maxFileBytes)
       throw new RunnerError(
-        `Preserved file was changed: ${file.path}`,
-        "conflict",
+        "Source is not a regular file within the configured size limit",
       );
-    await writeBytes(destination, file.path, bytes);
+    const target = await checkedPath(destination, file.path, true);
+    const temporary = join(dirname(target), `.pico-${randomUUID()}.tmp`);
+    try {
+      // A CoW clone when supported; portable copy otherwise. Never share writable inodes.
+      await copyFile(
+        input,
+        temporary,
+        constants.COPYFILE_FICLONE | constants.COPYFILE_EXCL,
+      );
+      const copied = await hashFile(
+        dirname(temporary),
+        basename(temporary),
+        limits.maxFileBytes,
+      );
+      if (copied.bytes !== file.bytes || copied.sha256 !== file.sha256)
+        throw new RunnerError(
+          `Preserved file was changed: ${file.path}`,
+          "conflict",
+        );
+      await rename(temporary, target);
+    } finally {
+      await rm(temporary, { force: true });
+    }
   }
   return files;
 }

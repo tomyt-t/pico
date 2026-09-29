@@ -163,9 +163,11 @@ export class PicoSession {
   private pump(labId: string): void {
     if (!this.started || this.closed || this.paused || this.active.has(labId))
       return;
-    const next = this.dependencies.conversations
+    const queued = this.dependencies.conversations
       .pendingTurns(labId)
-      .find((turn) => turn.status === "queued");
+      .filter((turn) => turn.status === "queued");
+    const next =
+      queued.find((turn) => turn.trigger === "researcher") ?? queued[0];
     if (!next) return;
     const controller = new AbortController();
     const promise = Promise.resolve()

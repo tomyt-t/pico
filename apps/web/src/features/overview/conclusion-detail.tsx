@@ -1,7 +1,10 @@
 import type { Conclusion, LabOverview } from "@pico/lab/contracts";
 import { routePath } from "@/web/app/navigation";
-import { timestamp } from "@/web/components/format";
+import { author, timestamp } from "@/web/components/format";
+import { useTranslation } from "@/web/components/i18n";
 import { Status } from "@/web/components/primitives";
+import { ClampedText, IdText } from "@/web/components/record-text";
+import { ResultLinks } from "@/web/features/overview/result-links";
 
 export function ConclusionRecord({
   row,
@@ -10,50 +13,42 @@ export function ConclusionRecord({
   row: Conclusion;
   overview: LabOverview;
 }) {
+  const { t } = useTranslation();
   return (
-    <article className="record">
-      <div className="record-heading">
-        <h3>{row.statement}</h3>
+    <article className="record" id={`conclusion-${row.id}`}>
+      <div className="chip-row">
         <Status value={row.status} />
+        {row.needsReview && (
+          <span className="status status-paused">
+            {t("common.needsReview")}
+          </span>
+        )}
+        <span className={`status status-confidence-${row.confidence}`}>
+          {t(`confidence.${row.confidence}`)}
+        </span>
       </div>
+      <ClampedText className="conclusion-statement">
+        {row.statement}
+      </ClampedText>
       <div className="record-meta">
-        <span>{row.confidence} confidence</span>
         <time dateTime={row.createdAt}>{timestamp(row.createdAt)}</time>
-        <span>By {row.author.kind === "pico" ? "Pico" : row.author.kind}</span>
+        <span>{t("common.by", { author: author(row.author.kind) })}</span>
       </div>
       {row.limitations && (
-        <p style={{ marginTop: 10 }}>
-          <strong>Limitations:</strong> {row.limitations}
+        <p className="limitations">
+          <strong>{t("common.limitations")}</strong>{" "}
+          <IdText>{row.limitations}</IdText>
         </p>
       )}
       <div className="link-list">
-        {row.resultIds.map((id) => {
-          const result = overview.results.find((entry) => entry.id === id);
-          return result ? (
-            <a
-              key={id}
-              href={routePath({
-                labId: overview.lab.id,
-                page: "experiments",
-                id: result.experimentId,
-              })}
-            >
-              Analysis of {result.runIds.length} run
-              {result.runIds.length === 1 ? "" : "s"}
-            </a>
-          ) : (
-            <span className="meta" key={id}>
-              Analysis {id}
-            </span>
-          );
-        })}
+        <ResultLinks row={row} overview={overview} />
         {row.paperIds.map((id) => (
           <a
             key={id}
             href={routePath({ labId: overview.lab.id, page: "library", id })}
           >
             {overview.papers.find((entry) => entry.id === id)?.title ??
-              "Referenced paper"}
+              t("overview.referencedPaper")}
           </a>
         ))}
       </div>

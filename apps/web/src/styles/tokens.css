@@ -1,27 +1,47 @@
 :root {
   color-scheme: light dark;
-  --bg: light-dark(#f6f6fa, #121218);
-  --surface: light-dark(#fff, #191920);
-  --soft: light-dark(#eff0f7, #212129);
-  --tint: light-dark(#f3f4fb, #1c1c24);
-  --border: light-dark(#d9dbe3, #2e2e39);
-  --ink: light-dark(#18181b, #e9e9ef);
-  --secondary: light-dark(#52525b, #b3b3c0);
-  --muted: light-dark(#62626d, #9696a5);
-  --accent: light-dark(#4f46e5, #6d64ea);
-  --accent-ink: light-dark(#4338ca, #b0aaff);
-  --accent-soft: light-dark(#e8eaff, #27243d);
-  --success: light-dark(#0f766e, #4fd1c5);
-  --success-soft: light-dark(#ecfdf5, #153431);
-  --warning: light-dark(#945904, #f1c56b);
-  --warning-soft: light-dark(#fffbeb, #332b18);
+  --bg: light-dark(#f7f7f4, #111113);
+  --surface: light-dark(#fff, #18181b);
+  --soft: light-dark(#efefea, #232327);
+  --tint: light-dark(#f9f9f6, #1c1c20);
+  --border: light-dark(#e3e2db, #2c2c32);
+  --border-strong: light-dark(#cfcec6, #3b3b42);
+  --ink: light-dark(#1b1b1f, #ececef);
+  --secondary: light-dark(#46464e, #c2c2cb);
+  --muted: light-dark(#696972, #a3a3ad);
+  --accent: light-dark(#4f46c8, #7a72ee);
+  --accent-ink: light-dark(#3f37b0, #bcb7ff);
+  --accent-soft: light-dark(#ecebfb, #25233c);
+  --info: light-dark(#1f5fbf, #8fbaff);
+  --info-soft: light-dark(#e9f1fc, #1a2740);
+  --success: light-dark(#0f766e, #5fd4c8);
+  --success-soft: light-dark(#e8f7f3, #14302d);
+  --warning: light-dark(#8a5300, #f1c56b);
+  --warning-soft: light-dark(#fdf5e2, #2f2816);
   --danger: light-dark(#b42318, #ffaaa5);
-  --danger-soft: light-dark(#fff1f2, #3a2024);
-  font-family:
+  --danger-soft: light-dark(#fdeeec, #3a2024);
+  --font-sans:
     "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 14px;
-  line-height: 1.55;
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 30px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --shadow-color: light-dark(#1b1b1f12, #00000066);
+  --shadow-sm: 0 1px 2px var(--shadow-color);
+  --shadow-md: 0 6px 20px var(--shadow-color);
+  --measure: 72ch;
+  --ease: 140ms ease;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
   font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
   color: var(--ink);
   background: var(--bg);
 }

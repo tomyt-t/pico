@@ -13,7 +13,24 @@ import type {
   Result,
 } from "@/lab/contracts/research";
 
+export interface RecordReference {
+  id: string;
+  kind:
+    | "question"
+    | "hypothesis"
+    | "experiment"
+    | "run"
+    | "result"
+    | "conclusion"
+    | "paper"
+    | "dataset";
+  title: string;
+  questionId?: string;
+  experimentId?: string;
+}
+
 export interface LabOverview {
+  resumableTurns?: Turn[];
   lab: Lab;
   questions: Question[];
   hypotheses: Hypothesis[];

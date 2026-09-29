@@ -5,6 +5,11 @@ import type {
   ProviderStatus,
 } from "@/lab/contracts";
 import type { ModelAdapter, ModelCall } from "@/lab/models/model-contract";
+import {
+  isContextOverflow,
+  ModelContextOverflow,
+  ModelResponseError,
+} from "@/lab/models/model-contract";
 
 const completionSchema = z.object({
   choices: z
@@ -105,8 +110,25 @@ export const complete: ModelAdapter = async ({
     }),
   });
   // An upstream error can echo request headers. Do not persist an arbitrary upstream body.
-  if (!response.ok)
+  if (!response.ok) {
+    // Classification only: no upstream text, headers or credentials are retained.
+    if ([400, 413, 422].includes(response.status)) {
+      const reader = response.body?.getReader();
+      let sample = "";
+      if (reader) {
+        while (sample.length < 16_000) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          sample += new TextDecoder().decode(
+            value.subarray(0, 16_000 - sample.length),
+          );
+        }
+        await reader.cancel();
+      }
+      if (isContextOverflow(sample)) throw new ModelContextOverflow();
+    }
     throw new Error(`Model provider returned HTTP ${response.status}`);
+  }
   let parsed: z.infer<typeof completionSchema>;
   try {
     parsed = completionSchema.parse(await response.json());
@@ -118,8 +140,9 @@ export const complete: ModelAdapter = async ({
   const choice = parsed.choices[0];
   if (!choice) throw new Error("Model provider returned no choices");
   if (choice.finish_reason === "length")
-    throw new Error(
+    throw new ModelResponseError(
       "Model output was truncated; increase the provider output limit",
+      parsed.usage as JsonObject | undefined,
     );
   let calls: ModelCall[];
   try {
@@ -131,12 +154,16 @@ export const complete: ModelAdapter = async ({
         .parse(JSON.parse(call.function.arguments)) as JsonObject,
     }));
   } catch {
-    throw new Error(
+    throw new ModelResponseError(
       "Model provider returned invalid tool arguments; no tool was executed",
+      parsed.usage as JsonObject | undefined,
     );
   }
   if (new Set(calls.map((call) => call.id)).size !== calls.length)
-    throw new Error("Model returned duplicate tool call identifiers");
+    throw new ModelResponseError(
+      "Model returned duplicate tool call identifiers",
+      parsed.usage as JsonObject | undefined,
+    );
   return {
     content: choice.message.content ?? choice.message.refusal ?? "",
     calls,

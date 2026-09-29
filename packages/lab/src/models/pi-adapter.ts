@@ -15,6 +15,11 @@ import type {
   ModelReply,
   ModelStep,
   NativeTranscript,
+  ReplayEntry,
+} from "@/lab/models/model-contract";
+import {
+  isContextOverflow,
+  ModelContextOverflow,
 } from "@/lab/models/model-contract";
 import { complete } from "@/lab/models/openai-compatible";
 
@@ -135,7 +140,10 @@ function projectReply(message: AssistantMessage, aborted = false): ModelReply {
     .map((block) => block.text)
     .join("\n");
   if (aborted || !["stop", "toolUse"].includes(native.stopReason)) {
-    const error = publicError(aborted ? "aborted" : native.stopReason);
+    const overflow = !aborted && isContextOverflow(native.errorMessage);
+    const error = overflow
+      ? new ModelContextOverflow().message
+      : publicError(aborted ? "aborted" : native.stopReason);
     // Provider error text can contain request headers. Preserve protocol state, not echoed secrets.
     native.errorMessage = error;
     return { content, calls: [], usage, native: encodeNative(native), error };
@@ -222,8 +230,10 @@ export function createPiAdapter(runtime: PiInferenceRuntime): ModelAdapter {
         },
       );
       return projectReply(native, input.signal.aborted);
-    } catch {
+    } catch (error) {
       // Never persist arbitrary SDK exception text or nested credential objects.
+      if (!input.signal.aborted && isContextOverflow(error))
+        throw new ModelContextOverflow();
       throw new Error(
         input.signal.aborted
           ? "Pi model request was interrupted."
@@ -260,13 +270,13 @@ export function encodeNative(message: Message): NativeTranscript {
   };
 }
 
-export function replayGroups(
+export function replayEntries(
   messages: ResearchMessage[],
   steps: ModelStep[],
-): ModelMessage[][] {
+): ReplayEntry[] {
   const nativeSteps = new Map(steps.map((step) => [step.id, step]));
   const emitted = new Set<string>();
-  const groups: ModelMessage[][] = [];
+  const groups: ReplayEntry[] = [];
   for (const message of messages) {
     const step = message.modelStepId
       ? nativeSteps.get(message.modelStepId)
@@ -274,7 +284,8 @@ export function replayGroups(
     if (step?.replayable === false) continue;
     if (!step?.native) {
       const group = toModelMessages(message);
-      if (group.length) groups.push(group);
+      if (group.length)
+        groups.push({ messageIds: [message.id], messages: group });
       continue;
     }
     if (emitted.has(step.id)) continue;
@@ -318,10 +329,12 @@ export function replayGroups(
     for (const result of results) {
       const call = result?.toolCall;
       if (!call || !result) continue;
-      const text = JSON.stringify(
-        call.status === "failed"
-          ? { error: call.error }
-          : (call.result ?? null),
+      const text = boundedToolResult(
+        JSON.stringify(
+          call.status === "failed"
+            ? { error: call.error }
+            : (call.result ?? null),
+        ),
       );
       const timestamp = Date.parse(result.createdAt);
       group.push({
@@ -341,9 +354,21 @@ export function replayGroups(
         }),
       });
     }
-    groups.push(group);
+    groups.push({
+      messageIds: messages
+        .filter((item) => item.modelStepId === step.id)
+        .map((item) => item.id),
+      messages: group,
+    });
   }
   return groups;
+}
+
+export function replayGroups(
+  messages: ResearchMessage[],
+  steps: ModelStep[],
+): ModelMessage[][] {
+  return replayEntries(messages, steps).map((entry) => entry.messages);
 }
 
 function toModelMessages(message: ResearchMessage): ModelMessage[] {
@@ -371,22 +396,35 @@ function toModelMessages(message: ResearchMessage): ModelMessage[] {
         tool_name: tool.name,
         isError: tool.status === "failed",
         timestamp: Date.parse(message.createdAt),
-        content: bounded(
+        content: boundedToolResult(
           JSON.stringify(
             tool.status === "failed" ? { error: tool.error } : tool.result,
           ),
-          18_000,
         ),
       },
     ];
   }
   return [
     {
-      role: message.role,
+      // Historical run events used system. They remain intact on disk, but
+      // reference data never gains instruction authority during replay.
+      role: message.role === "system" ? "user" : message.role,
       content: bounded(message.content, 14_000),
       timestamp: Date.parse(message.createdAt),
     },
   ];
+}
+function boundedToolResult(value: string | undefined): string {
+  const text = value ?? "null";
+  return Buffer.byteLength(text) <= 12_000
+    ? text
+    : JSON.stringify({
+        clipped: true,
+        detail:
+          "Excerpt clipped; use paginated tools/read_history to inspect the preserved original.",
+        excerpt: bounded(text, 2_500),
+        totalBytes: Buffer.byteLength(text),
+      });
 }
 function bounded(value: string | undefined, max: number): string {
   const content = value ?? "null";

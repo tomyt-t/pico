@@ -6,9 +6,7 @@
 .resource-title .pico-mark {
   width: 24px;
   height: 24px;
-  font:
-    11px ui-monospace,
-    monospace;
+  font: 11px var(--font-mono);
   background: var(--soft);
   color: var(--muted);
   flex-shrink: 0;
@@ -17,6 +15,7 @@
   max-height: 540px;
   overflow: auto;
   background: var(--tint);
-  border-radius: 5px;
-  padding: 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  padding: 20px 22px;
 }

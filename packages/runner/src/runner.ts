@@ -4,6 +4,7 @@ import { exportBundle, importBundle, validateBundle } from "@/runner/archives";
 import { acquireCoordinatorLock } from "@/runner/coordinator-lock";
 import {
   type ExecutionInventory,
+  type ExecutionIssue,
   type RunBundle,
   type RunRecord,
   type RunRequest,
@@ -11,6 +12,11 @@ import {
   terminal,
 } from "@/runner/execution-contract";
 import { ExecutionFiles } from "@/runner/execution-files";
+import {
+  removeWork,
+  repairUnknownRecord,
+  repairUnreadableRecord,
+} from "@/runner/execution-repair";
 import * as files from "@/runner/files";
 import { atomicJson, RunnerError } from "@/runner/files";
 import { readLogs } from "@/runner/outputs";
@@ -23,6 +29,7 @@ export type {
   DatasetManifestV1,
   ExecutionInspection,
   ExecutionInventory,
+  ExecutionIssue,
   Metric,
   RunBundle,
   RunRecord,
@@ -31,16 +38,10 @@ export type {
   SnapshotManifest,
   SnapshotSources,
 } from "@/runner/execution-contract";
-export type { FileDigest, FileInput } from "@/runner/files";
+export { executionControlFiles } from "@/runner/execution-files";
+export type { FileDigest, FileInput, FileLimits } from "@/runner/files";
+export { localRunnerCapabilities } from "@/runner/processes";
 export { RunnerError, terminal, validateBundle };
-export const executionControlFiles = [
-  "worker.claim",
-  "watchdog.claim",
-  "dispatch.json",
-  "execution-started.json",
-  "termination.json",
-  "cancel.json",
-] as const;
 /** Safe byte/file operations; consumers own their own scientific formats and directories. */
 export const fileAccess = {
   atomicJson: files.atomicJson,
@@ -50,6 +51,7 @@ export const fileAccess = {
   ensureDirectory: files.ensureDirectory,
   exists: files.exists,
   listFiles: files.listFiles,
+  hashFile: files.hashFile,
   readBytes: files.readBytes,
   readJson: files.readJson,
   safeId: files.safeId,
@@ -58,6 +60,7 @@ export const fileAccess = {
   MAX_FILE_BYTES: files.MAX_FILE_BYTES,
   MAX_TREE_BYTES: files.MAX_TREE_BYTES,
   MAX_TREE_FILES: files.MAX_TREE_FILES,
+  LOCAL_DATASET_LIMITS: files.LOCAL_DATASET_LIMITS,
 };
 
 export interface RunnerOptions {
@@ -66,7 +69,15 @@ export interface RunnerOptions {
   getLabConcurrency?: (labId: string) => number;
   onUpdate?: (record: RunRecord) => void | Promise<void>;
   pollMs?: number;
-  environmentBindings?: Readonly<Record<string, string>>;
+  environmentBindings?:
+    | Readonly<Record<string, string>>
+    | ((
+        request: RunRequest,
+      ) =>
+        | Readonly<Record<string, string>>
+        | Promise<Readonly<Record<string, string>>>);
+  cleanupWorkOnCompletion?: boolean;
+  datasetLimits?: Partial<files.FileLimits>;
 }
 type Lifecycle = "constructed" | "starting" | "active" | "closing" | "closed";
 
@@ -88,6 +99,8 @@ export class Runner {
   private readonly delivered = new Map<string, string>();
   private readonly deliveryFailures = new Set<string>();
   private readonly maximum: number;
+  private recoveredPublications: string[] = [];
+  private publicationIssues: ExecutionIssue[] = [];
 
   constructor(private readonly options: RunnerOptions) {
     this.maximum = options.maxConcurrent ?? 1;
@@ -98,7 +111,7 @@ export class Runner {
     )
       throw new RunnerError("Concurrency must be between 1 and 16");
     this.files = new ExecutionFiles(resolve(options.dataDir));
-    this.snapshots = new Snapshots(this.files);
+    this.snapshots = new Snapshots(this.files, options.datasetLimits);
   }
   get root(): string {
     return this.files.root;
@@ -116,8 +129,11 @@ export class Runner {
       try {
         await mkdir(join(this.root, "labs"), { recursive: true });
         this.files = new ExecutionFiles(await realpath(this.root));
-        this.snapshots = new Snapshots(this.files);
+        this.snapshots = new Snapshots(this.files, this.options.datasetLimits);
         this.release = acquireCoordinatorLock(this.root);
+        const recovery = await this.files.recoverPublications();
+        this.recoveredPublications = recovery.recovered;
+        this.publicationIssues = recovery.issues;
         await this.runCycle(false);
         if (this.closing) return;
         this.state = "active";
@@ -167,14 +183,29 @@ export class Runner {
   private runCycle(dispatch = this.dispatchEnabled): Promise<void> {
     if (this.cycle) return this.cycle;
     this.cycle = (async () => {
-      const { records } = await this.files.scan();
+      const { records, issues, pending } = await this.files.scan();
       const inspections = [];
       for (const record of records) {
         const inspection = await inspectExecution(this.files, record);
         inspections.push(inspection);
         await this.notify(inspection.record);
+        if (
+          inspection.state === "terminal" &&
+          this.options.cleanupWorkOnCompletion !== false
+        )
+          await removeWork(this.files.runDir(record.labId, record.id)).catch(
+            () => {
+              /* A terminal publication can briefly precede supervisor exit. Recheck next cycle. */
+            },
+          );
       }
-      if (dispatch && this.dispatchEnabled && !this.deliveryFailures.size)
+      if (
+        dispatch &&
+        this.dispatchEnabled &&
+        !this.deliveryFailures.size &&
+        !issues.length &&
+        !pending.length
+      )
         await dispatchPending(this.files, inspections, {
           maxConcurrent: this.maximum,
           getLabConcurrency: this.options.getLabConcurrency,
@@ -291,6 +322,24 @@ export class Runner {
       const pendingDeliveries = [...this.deliveryFailures];
       return {
         runs,
+        issues: [
+          ...scan.issues,
+          ...this.publicationIssues.filter((issue) =>
+            scan.pending.includes(join(this.root, issue.directory)),
+          ),
+          ...pendingDeliveries.map((key): ExecutionIssue => {
+            const [labId = "", runId = ""] = key.split(":");
+            return {
+              labId,
+              runId,
+              directory: `labs/${labId}/runs/${runId}`,
+              kind: "observation_delivery",
+              reason:
+                "Execution observations could not be projected into the laboratory; restore or repair scientific provenance, then recheck",
+            };
+          }),
+        ],
+        recoveredPublications: [...this.recoveredPublications],
         pendingPublications,
         pendingDeliveries,
         safeToBackup:
@@ -298,7 +347,45 @@ export class Runner {
           this.pending.size === 1 &&
           !pendingPublications.length &&
           !pendingDeliveries.length &&
+          !scan.issues.length &&
           runs.every((item) => item.state === "terminal"),
+      };
+    });
+  }
+  repairExecution(labId: string, runId: string) {
+    return this.admit(async () => {
+      await this.cycle;
+      let record: RunRecord;
+      try {
+        record = await this.files.getRun(labId, runId);
+      } catch {
+        record = await repairUnreadableRecord(this.files, labId, runId);
+      }
+      await this.snapshots.get(labId, runId);
+      let inspection = await inspectExecution(this.files, record);
+      if (inspection.state === "unknown") {
+        record = await repairUnknownRecord(this.files, record);
+        inspection = await inspectExecution(this.files, record);
+      }
+      await this.notify(inspection.record);
+      return inspection;
+    });
+  }
+  cleanupWork(labId: string, runId: string) {
+    return this.admit(async () => {
+      const inspection = await inspectExecution(
+        this.files,
+        await this.files.getRun(labId, runId),
+      );
+      if (inspection.state !== "terminal")
+        throw new RunnerError(
+          "Work cleanup requires confirmed execution termination",
+          "conflict",
+        );
+      return {
+        labId,
+        runId,
+        removed: await removeWork(this.files.runDir(labId, runId)),
       };
     });
   }

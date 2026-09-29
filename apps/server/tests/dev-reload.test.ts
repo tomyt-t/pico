@@ -131,7 +131,12 @@ test("HTTP entrypoint aborts application work before waiting for active requests
     join(root, "tsconfig.json"),
     JSON.stringify({
       compilerOptions: {
-        paths: { "@/server/server": [join(root, "application.ts")] },
+        paths: {
+          "@/server/server": [join(root, "application.ts")],
+          "@/server/http/browser-policy": [
+            resolve(import.meta.dir, "../src/http/browser-policy.ts"),
+          ],
+        },
       },
     }),
   );

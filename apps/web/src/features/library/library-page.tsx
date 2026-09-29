@@ -2,6 +2,7 @@ import type { LabOverview } from "@pico/lab/contracts";
 import { useState } from "react";
 import { routePath } from "@/web/app/navigation";
 import { timestamp } from "@/web/components/format";
+import { useTranslation } from "@/web/components/i18n";
 import { Empty, Icon, PageHeading, Section } from "@/web/components/primitives";
 import { QueryState } from "@/web/components/query-state";
 import { DatasetDetail } from "@/web/features/library/dataset-detail";
@@ -22,6 +23,7 @@ export function Library({
   discuss: (text: string) => void;
   refresh: () => void;
 }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState<"papers" | "datasets" | null>(null);
   const [search, setSearch] = useState("");
   const kind = tab === "datasets" ? "datasets" : "papers";
@@ -43,23 +45,23 @@ export function Library({
               tab: kind,
             })}
           >
-            ← Library
+            {t("library.back")}
           </a>
           {paper ? (
             <PaperDetail paper={paper} overview={overview} discuss={discuss} />
           ) : dataset ? (
             <DatasetDetail dataset={dataset} overview={overview} />
           ) : (
-            <Empty title="Resource not found">
-              This resource is not part of the selected laboratory.
+            <Empty title={t("library.notFound")}>
+              {t("library.notFoundBody")}
             </Empty>
           )}
         </>
       ) : (
         <>
           <PageHeading
-            eyebrow="Research library"
-            title="Sources you can return to."
+            eyebrow={t("library.eyebrow")}
+            title={t("library.title")}
             action={
               <button
                 className="primary"
@@ -67,19 +69,20 @@ export function Library({
                 onClick={() => setAdding(kind)}
               >
                 <Icon name="plus" size={15} />
-                {kind === "papers" ? "Add paper" : "Register dataset"}
+                {kind === "papers"
+                  ? t("library.addPaper")
+                  : t("library.registerDataset")}
               </button>
             }
           >
-            Papers and preserved datasets, with their origins and connections to
-            the research.
+            {t("library.subtitle")}
           </PageHeading>
-          <nav className="tabs" aria-label="Library collections">
+          <nav className="tabs" aria-label={t("library.collections")}>
             <a
               aria-current={kind === "papers" ? "page" : undefined}
               href={routePath({ labId: overview.lab.id, page: "library" })}
             >
-              Papers · {overview.papers.length}
+              {t("library.papersTab", { count: overview.papers.length })}
             </a>
             <a
               aria-current={kind === "datasets" ? "page" : undefined}
@@ -89,22 +92,32 @@ export function Library({
                 tab: "datasets",
               })}
             >
-              Datasets · {overview.datasets.length}
+              {t("library.datasetsTab", { count: overview.datasets.length })}
             </a>
           </nav>
           <div className="toolbar">
             <label className="sr-only" htmlFor="library-search">
-              Search library
+              {t("library.searchLabel")}
             </label>
             <input
               id="library-search"
               type="search"
-              placeholder={`Search ${kind}…`}
+              placeholder={
+                kind === "papers"
+                  ? t("library.searchPapers")
+                  : t("library.searchDatasets")
+              }
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
-          <Section title={kind === "papers" ? "Papers" : "Dataset versions"}>
+          <Section
+            title={
+              kind === "papers"
+                ? t("library.papers")
+                : t("library.datasetVersions")
+            }
+          >
             {kind === "papers" ? (
               <>
                 {overview.papers
@@ -128,11 +141,13 @@ export function Library({
                       </h3>
                       <p>{entry.authors.join(", ") || entry.source}</p>
                       <div className="record-meta">
-                        <span>{entry.identifier || "Provided source"}</span>
+                        <span>
+                          {entry.identifier || t("library.providedSource")}
+                        </span>
                         <span>
                           {entry.text
-                            ? "Source text available"
-                            : "Metadata only"}
+                            ? t("library.textAvailable")
+                            : t("library.metadataOnly")}
                         </span>
                         <time dateTime={entry.createdAt}>
                           {timestamp(entry.createdAt)}
@@ -146,9 +161,13 @@ export function Library({
                     .includes(search.toLowerCase()),
                 ) && (
                   <Empty
-                    title={search ? "No matching papers" : "The shelf is empty"}
+                    title={
+                      search
+                        ? t("library.noMatchingPapers")
+                        : t("library.emptyShelf")
+                    }
                   >
-                    Add a source or ask Pico to investigate the literature.
+                    {t("library.emptyShelfBody")}
                   </Empty>
                 )}
               </>
@@ -175,18 +194,23 @@ export function Library({
                             {entry.name}
                           </a>
                         </h3>
-                        <span className="status">Version {entry.version}</span>
+                        <span className="status">
+                          {t("common.version", { version: entry.version })}
+                        </span>
                       </div>
                       <p>{entry.description || entry.source}</p>
                       <div className="record-meta">
-                        <span>{entry.files.length} preserved files</span>
                         <span>
-                          {
-                            overview.experiments.filter((experiment) =>
+                          {t("library.preservedFiles", {
+                            count: entry.files.length,
+                          })}
+                        </span>
+                        <span>
+                          {t("library.experimentLinks", {
+                            count: overview.experiments.filter((experiment) =>
                               experiment.datasetVersionIds.includes(entry.id),
-                            ).length
-                          }{" "}
-                          experiment links
+                            ).length,
+                          })}
                         </span>
                         <time dateTime={entry.createdAt}>
                           {timestamp(entry.createdAt)}
@@ -202,12 +226,11 @@ export function Library({
                   <Empty
                     title={
                       search
-                        ? "No matching datasets"
-                        : "No dataset versions yet"
+                        ? t("library.noMatchingDatasets")
+                        : t("library.noDatasets")
                     }
                   >
-                    Register input files with their source. Each run keeps the
-                    version it used.
+                    {t("library.noDatasetsBody")}
                   </Empty>
                 )}
               </>

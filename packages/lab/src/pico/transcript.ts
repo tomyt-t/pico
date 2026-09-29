@@ -78,7 +78,11 @@ export function persistReply(
       });
     }
     return {
-      turn: saveTurn(repository, { ...turn, steps: turn.steps + 1 }),
+      turn: saveTurn(repository, {
+        ...turn,
+        steps: turn.steps + 1,
+        usage: repository.modelUsage(turn.labId, turn.id),
+      }),
       ...(error ? { error } : {}),
     };
   });

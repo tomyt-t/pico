@@ -1,9 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
-import type { ExecutionInspection } from "@/runner/execution-contract";
+import type {
+  ExecutionInspection,
+  RunRequest,
+  SnapshotManifest,
+} from "@/runner/execution-contract";
 import type { ExecutionFiles } from "@/runner/execution-files";
-import { atomicJson, RunnerError } from "@/runner/files";
-import { spawnSupervisor } from "@/runner/processes";
+import { atomicJson, RunnerError, readJson } from "@/runner/files";
+import { executionEnvironment, spawnSupervisor } from "@/runner/processes";
 import type { DispatchReceipt } from "@/runner/recovery";
 
 export async function dispatchPending(
@@ -12,7 +16,13 @@ export async function dispatchPending(
   options: {
     maxConcurrent: number;
     getLabConcurrency?: (labId: string) => number;
-    environmentBindings: Readonly<Record<string, string>>;
+    environmentBindings:
+      | Readonly<Record<string, string>>
+      | ((
+          request: RunRequest,
+        ) =>
+          | Readonly<Record<string, string>>
+          | Promise<Readonly<Record<string, string>>>);
     isAllowed: () => boolean;
   },
 ): Promise<void> {
@@ -32,6 +42,31 @@ export async function dispatchPending(
       throw new RunnerError("Laboratory concurrency must be between 1 and 16");
     if ((labs.get(record.labId) ?? 0) >= limit) continue;
     const directory = files.runDir(record.labId, record.id);
+    let bindings: Readonly<Record<string, string>>;
+    try {
+      bindings =
+        typeof options.environmentBindings === "function"
+          ? await options.environmentBindings(
+              (
+                await readJson<SnapshotManifest>(
+                  join(directory, "snapshot"),
+                  "manifest.json",
+                )
+              ).request,
+            )
+          : options.environmentBindings;
+      executionEnvironment(directory, bindings); // Reject configuration before recording a process reservation.
+    } catch {
+      await files.saveRun({
+        ...record,
+        status: "failed",
+        endedAt: new Date().toISOString(),
+        error:
+          "Execution environment could not be resolved; review the laboratory configuration",
+      });
+      continue;
+    }
+    if (!options.isAllowed()) break;
     const receipt: DispatchReceipt = {
       token: randomUUID(),
       createdAt: new Date().toISOString(),
@@ -39,11 +74,7 @@ export async function dispatchPending(
     await atomicJson(join(directory, "dispatch.json"), receipt);
     let child: Awaited<ReturnType<typeof spawnSupervisor>> | undefined;
     try {
-      child = await spawnSupervisor(
-        directory,
-        receipt.token,
-        options.environmentBindings,
-      );
+      child = await spawnSupervisor(directory, receipt.token, bindings);
     } catch (error) {
       await files.saveRun({
         ...record,

@@ -3,9 +3,23 @@ import { z } from "zod";
 import type { RequestContext } from "@/server/http/request-context";
 import { json } from "@/server/http/responses";
 export function conversationRoutes(
-  { resource, labId, id, action, method, body, mutation }: RequestContext,
+  { resource, labId, id, action, method, body, mutation, url }: RequestContext,
   runtime: LabRuntime,
 ): Response | undefined {
+  if (resource === "history" && method === "GET") {
+    const limit = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .parse(url.searchParams.get("limit") ?? 100);
+    return json(
+      runtime.research.readHistory(labId, {
+        limit,
+        before: url.searchParams.get("before") ?? undefined,
+      }),
+    );
+  }
   if (resource === "conversation" && method === "GET")
     return json(runtime.research.conversationView(labId));
   if (resource === "chat" && method === "POST") {

@@ -3,12 +3,14 @@ import type { FileDigest, FileInput } from "@/runner/files";
 export type Actor = { kind: "researcher" | "pico" | "system"; turnId?: string };
 export interface Criterion {
   hypothesisId: string;
+  hypothesisRevision?: number;
   metric: string;
   expectation: string;
   comparator?: "gt" | "gte" | "lt" | "lte" | "eq";
   threshold?: number;
   split?: string;
   unit?: string;
+  step?: number;
 }
 
 export type RunStatus =
@@ -55,6 +57,7 @@ export interface RunRequest {
   timeoutMs: number;
   runtime?: "python" | "uv";
   referenceRunId?: string;
+  resources?: { memoryMiB?: number; gpuDevices?: string[] };
 }
 export interface SnapshotManifest {
   schemaVersion: 1;
@@ -112,7 +115,20 @@ export interface ExecutionInspection {
 }
 export interface ExecutionInventory {
   runs: ExecutionInspection[];
+  issues: ExecutionIssue[];
+  recoveredPublications: string[];
   pendingPublications: string[];
   pendingDeliveries: string[];
   safeToBackup: boolean;
+}
+export interface ExecutionIssue {
+  labId: string;
+  runId?: string;
+  directory: string;
+  kind:
+    | "unreadable_record"
+    | "unreadable_snapshot"
+    | "unsafe_publication"
+    | "observation_delivery";
+  reason: string;
 }

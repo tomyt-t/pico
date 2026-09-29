@@ -1,5 +1,6 @@
 import type { Lab } from "@pico/lab/contracts";
 import type { RefObject } from "react";
+import { Trans, useTranslation } from "@/web/components/i18n";
 import { Icon, Notice } from "@/web/components/primitives";
 export function MessageComposer({
   lab,
@@ -26,11 +27,12 @@ export function MessageComposer({
   send: () => Promise<void>;
   onStop: () => Promise<void>;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="composer-wrap">
       {error && (
         <Notice error>
-          {error} Your draft is kept. Retrying uses the same request.
+          {error} {t("chat.draftKept")}
         </Notice>
       )}
       <form
@@ -41,15 +43,13 @@ export function MessageComposer({
         }}
       >
         <label className="sr-only" htmlFor="pico-message">
-          Message Pico
+          {t("chat.messageLabel")}
         </label>
         <textarea
           id="pico-message"
           ref={textarea}
           placeholder={
-            working
-              ? "Prepare your next thought while Pico works…"
-              : "Discuss your research with Pico…"
+            working ? t("chat.placeholderWorking") : t("chat.placeholderIdle")
           }
           value={draft}
           onChange={(event) => onDraft(event.target.value)}
@@ -66,33 +66,39 @@ export function MessageComposer({
         />
         <div className="composer-bottom">
           <span className="composer-hint">
-            One conversation · Shift + Enter for a new line
+            <Trans i18nKey="chat.hint" components={{ kbd: <kbd /> }} />
           </span>
-          {working ? (
+          {working && (
             <button
               type="button"
-              className="small"
+              className="small stop-button"
               disabled={stopping}
               onClick={onStop}
             >
-              Stop Pico's turn
-            </button>
-          ) : (
-            <button
-              className="primary small"
-              type="submit"
-              disabled={!draft.trim() || sending || !connected}
-            >
-              {sending ? "Sending…" : "Send"}
-              <Icon name="arrow" size={15} />
+              <Icon name="stop" size={13} />
+              {stopping ? t("chat.stopping") : t("chat.stop")}
             </button>
           )}
+          <button
+            className="primary small"
+            type="submit"
+            disabled={!draft.trim() || sending || !connected}
+          >
+            {sending
+              ? t("chat.sending")
+              : working
+                ? t("chat.enqueue")
+                : t("chat.send")}
+            <Icon name="arrow" size={15} />
+          </button>
         </div>
       </form>
       <p className="chat-footer">
         {lab.settings.provider.mode === "demo"
-          ? "Demonstration model · simulated narration, real laboratory records"
-          : `${lab.settings.provider.model || "External model"} · conclusions stay linked to their evidence`}
+          ? t("chat.footerDemo")
+          : t("chat.footerModel", {
+              model: lab.settings.provider.model || t("chat.externalModel"),
+            })}
       </p>
     </div>
   );

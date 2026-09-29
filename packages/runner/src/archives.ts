@@ -9,6 +9,7 @@ import {
   ensureDirectory,
   exists,
   type FileInput,
+  MAX_FILE_BYTES,
   MAX_TREE_BYTES,
   MAX_TREE_FILES,
   RunnerError,
@@ -46,6 +47,16 @@ export async function exportBundle(
     })),
   ];
   const files: FileInput[] = [];
+  if (
+    requested.some((file) => file.bytes > MAX_FILE_BYTES) ||
+    requested.reduce((total, file) => total + file.bytes, 0) >
+      MAX_TREE_BYTES * 3 ||
+    requested.length + 2 > MAX_TREE_FILES * 3
+  )
+    throw new RunnerError(
+      "This execution exceeds the small JSON run archive limits. Use a full research backup to preserve larger datasets.",
+      "conflict",
+    );
   for (const file of requested) {
     const bytes = await readBytes(root, file.path);
     if (digest(bytes) !== file.sha256 || bytes.length !== file.bytes)

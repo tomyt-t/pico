@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import type {
   DatasetVersion,
   Experiment,
@@ -117,7 +118,7 @@ export function updateRun(
     if (
       patch.snapshot !== undefined &&
       current.snapshot &&
-      JSON.stringify(patch.snapshot) !== JSON.stringify(current.snapshot)
+      !sameJson(patch.snapshot, current.snapshot)
     ) {
       throw new LabError(
         "CONFLICT",
@@ -209,7 +210,7 @@ export function validateSnapshot(
     snapshot.protocol !== historical.protocol ||
     snapshot.entrypoint !== historical.entrypoint ||
     snapshot.runtime !== historical.runtime ||
-    JSON.stringify(snapshot.criteria) !== JSON.stringify(historical.criteria)
+    !sameJson(snapshot.criteria, historical.criteria)
   ) {
     throw new LabError(
       "BAD_REQUEST",
@@ -254,13 +255,32 @@ export function validateSnapshot(
     const reference = context.getRecord<Run>(labId, "run", referenceRunId);
     if (
       !reference.snapshot ||
-      reference.snapshot.codeHash !== snapshot.codeHash ||
-      reference.snapshot.experimentRevision !== snapshot.experimentRevision
+      !sameJson(
+        reproductionInputs(reference.snapshot),
+        reproductionInputs(snapshot),
+      )
     ) {
       throw new LabError(
         "BAD_REQUEST",
-        "Reproduction must preserve the reference code and protocol revision",
+        "Reproduction must preserve the reference code, protocol, configuration, arguments, resources and dataset inputs",
       );
     }
   }
+}
+
+function reproductionInputs(snapshot: RunSnapshot) {
+  const {
+    createdAt: _time,
+    environment: _observedEnvironment,
+    ...inputs
+  } = snapshot;
+  return inputs;
+}
+
+/** Object key order is not scientific provenance; array order and values are. */
+function sameJson(left: unknown, right: unknown): boolean {
+  return isDeepStrictEqual(
+    JSON.parse(JSON.stringify(left)),
+    JSON.parse(JSON.stringify(right)),
+  );
 }

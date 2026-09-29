@@ -1,4 +1,9 @@
-import { createRunner } from "@pico/runner";
+import {
+  createRunner,
+  fileAccess,
+  localRunnerCapabilities,
+} from "@pico/runner";
+import type { Experiment } from "@/lab/contracts";
 import type { ModelAccess } from "@/lab/models/model-contract";
 import { createModelGateway } from "@/lab/models/model-gateway";
 import { preparePiProfile } from "@/lab/models/pi-profile";
@@ -42,12 +47,14 @@ const researchCapabilities = [
   "createExperiment",
   "reviseExperiment",
   "registerDataset",
+  "importDatasetDirectory",
   "registerPaper",
   "recordResult",
   "reviseResult",
   "recordConclusion",
   "reviseConclusion",
   "overview",
+  "recordIndex",
   "experimentDetail",
   "getConversation",
   "conversationView",
@@ -167,6 +174,73 @@ export function createLabRuntime(options: LabRuntimeOptions): LabRuntime {
         }),
     },
     administration: {
+      executionStatus: (labId) =>
+        admission.run(async () => {
+          required(research).getLab(labId);
+          const inventory = await required(runner).inventory();
+          return {
+            blocked:
+              inventory.issues.length > 0 ||
+              inventory.runs.some((item) => item.state === "unknown"),
+            capabilities: localRunnerCapabilities(),
+            otherBlockedLabs: [
+              ...new Set([
+                ...inventory.issues.map((issue) => issue.labId),
+                ...inventory.runs
+                  .filter((item) => item.state === "unknown")
+                  .map((item) => item.record.labId),
+              ]),
+            ]
+              .filter((id) => id !== labId)
+              .map((id) => ({
+                labId: id,
+                name:
+                  required(research)
+                    .listLabs()
+                    .find((item) => item.id === id)?.name ?? id,
+              })),
+            issues: inventory.issues.filter((issue) => issue.labId === labId),
+            runs: inventory.runs
+              .filter((item) => item.record.labId === labId)
+              .map((item) => ({
+                runId: item.record.id,
+                state: item.state,
+                reason: item.reason,
+              })),
+            recoveredPublications: inventory.recoveredPublications.filter(
+              (path) => path.startsWith(`labs/${labId}/`),
+            ),
+          };
+        }),
+      repairExecution: (labId, runId, context) =>
+        admission.run(async () => {
+          required(research).getRecord(labId, "run", runId);
+          return required(operations).effects.run(
+            labId,
+            "repairExecution",
+            { runId },
+            context,
+            async () => {
+              const inspected = await required(runner).repairExecution(
+                labId,
+                runId,
+              );
+              await required(operations).reconcile();
+              return { state: inspected.state, reason: inspected.reason };
+            },
+          );
+        }),
+      cleanupWork: (labId, runId, context) =>
+        admission.run(async () => {
+          required(research).getRecord(labId, "run", runId);
+          return required(operations).effects.run(
+            labId,
+            "cleanupWork",
+            { runId },
+            context,
+            () => required(runner).cleanupWork(labId, runId),
+          );
+        }),
       backup(destination, context) {
         admission.assertOpen();
         if (maintaining)
@@ -220,9 +294,19 @@ export function createLabRuntime(options: LabRuntimeOptions): LabRuntime {
           runner = createRunner({
             dataDir: paths.dataDir,
             maxConcurrent: 4,
-            environmentBindings: {
-              PICO_PI_AGENT_DIR: paths.agentDir,
-              PI_CODING_AGENT_DIR: paths.agentDir,
+            datasetLimits: fileAccess.LOCAL_DATASET_LIMITS,
+            environmentBindings: (request): Record<string, string> => {
+              const experiment = lab.getRecord<Experiment>(
+                request.labId,
+                "experiment",
+                request.experimentId,
+              );
+              return experiment.executionAccess?.piProfile
+                ? {
+                    PICO_PI_AGENT_DIR: paths.agentDir,
+                    PI_CODING_AGENT_DIR: paths.agentDir,
+                  }
+                : {};
             },
             getLabConcurrency: (labId) =>
               lab.getLab(labId).settings.maxConcurrentRuns,

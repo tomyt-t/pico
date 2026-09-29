@@ -1,5 +1,9 @@
-import type { ReactNode } from "react";
-import { titleCase } from "@/web/components/format";
+import { toJsxRuntime } from "hast-util-to-jsx-runtime";
+import { type ReactNode, useEffect, useState } from "react";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+import { statusLabel } from "@/web/components/format";
+import { highlight } from "@/web/components/highlight";
+import { i18n } from "@/web/components/i18n";
 
 export function Icon({
   name,
@@ -17,7 +21,8 @@ export function Icon({
     | "refresh"
     | "close"
     | "settings"
-    | "check";
+    | "check"
+    | "stop";
   size?: number;
 }) {
   const paths: Record<typeof name, ReactNode> = {
@@ -68,6 +73,7 @@ export function Icon({
       </>
     ),
     check: <path d="m5 12 4 4L19 6" />,
+    stop: <rect x="6" y="6" width="12" height="12" rx="2" />,
   };
   return (
     <svg
@@ -87,7 +93,7 @@ export function Icon({
 }
 
 export function Status({ value }: { value: string }) {
-  return <span className={`status status-${value}`}>{titleCase(value)}</span>;
+  return <span className={`status status-${value}`}>{statusLabel(value)}</span>;
 }
 export function Empty({
   title,
@@ -120,7 +126,7 @@ export function Notice({
   );
 }
 export function Loading({
-  children = "Loading laboratory…",
+  children = i18n.t("common.loadingLaboratory"),
 }: {
   children?: ReactNode;
 }) {
@@ -132,16 +138,18 @@ export function Loading({
   );
 }
 export function Section({
+  id,
   title,
   action,
   children,
 }: {
+  id?: string;
   title: string;
   action?: ReactNode;
   children: ReactNode;
 }) {
   return (
-    <section className="panel">
+    <section className="panel" id={id}>
       <div className="section-heading">
         <h2>{title}</h2>
         {action}
@@ -172,10 +180,42 @@ export function PageHeading({
     </header>
   );
 }
-export function Code({ children }: { children: string }) {
+export function CodeTokens({
+  children,
+  language,
+}: {
+  children: string;
+  language?: string;
+}) {
+  const [tokens, setTokens] = useState<ReactNode>(null);
+  useEffect(() => {
+    setTokens(null);
+    if (!language) return;
+    let current = true;
+    highlight(children, language)
+      .then((tree) => {
+        if (current && tree)
+          setTokens(toJsxRuntime(tree, { Fragment, jsx, jsxs }));
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [children, language]);
+  return tokens ?? children;
+}
+export function Code({
+  children,
+  language,
+}: {
+  children: string;
+  language?: string;
+}) {
   return (
     <pre className="code">
-      <code>{children}</code>
+      <code>
+        <CodeTokens language={language}>{children}</CodeTokens>
+      </code>
     </pre>
   );
 }

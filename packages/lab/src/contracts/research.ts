@@ -36,6 +36,10 @@ export interface Hypothesis extends RecordMeta {
   status: HypothesisStatus;
   assessment: string;
   resultIds: string[];
+  /** Derived provenance; absent on historical assessments whose basis was not recorded. */
+  resultRevisions?: { resultId: string; revision: number }[];
+  /** The recorded assessment is retained, but its evidence has since changed. */
+  needsReview?: boolean;
 }
 
 export type ObservationReference =
@@ -69,6 +73,9 @@ export interface Conclusion extends RecordMeta {
   limitations: string;
   status: "tentative" | "established" | "retracted";
   supersedesId: string | null;
+  /** Derived provenance; never supplied by callers. */
+  resultRevisions?: { resultId: string; revision: number }[];
+  needsReview?: boolean;
 }
 
 export const questionSchema = z

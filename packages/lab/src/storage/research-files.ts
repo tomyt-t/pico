@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { mkdir, rename, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { lstat, mkdir, realpath, rename, rm } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
 import {
   type DatasetManifest,
   type FileDigest,
@@ -9,7 +9,7 @@ import {
   fileAccess,
   RunnerError,
 } from "@pico/runner";
-import type { Actor, Run } from "@/lab/contracts";
+import type { Actor, DatasetDirectoryRegistration, Run } from "@/lab/contracts";
 
 const {
   ensureDirectory,
@@ -25,6 +25,9 @@ const {
   exists,
   atomicJson,
   readJson,
+  hashFile,
+  copyVerified,
+  LOCAL_DATASET_LIMITS,
 } = fileAccess;
 interface DatasetInput {
   labId: string;
@@ -38,6 +41,10 @@ interface DatasetInput {
   splits?: Record<string, number>;
   author?: Actor;
 }
+type DatasetDirectoryInput = Omit<DatasetInput, "files"> & {
+  directory: string;
+  limits?: DatasetDirectoryRegistration["limits"];
+};
 /** Laboratory-owned datasets, editable workspaces and scientific run metadata. */
 export class ResearchFiles {
   readonly root: string;
@@ -156,6 +163,109 @@ export class ResearchFiles {
   }
   async getDataset(labId: string, id: string): Promise<DatasetManifest> {
     return readJson(this.datasetDir(labId, id), "manifest.json");
+  }
+  async importDatasetDirectory(
+    input: DatasetDirectoryInput,
+  ): Promise<DatasetManifest> {
+    if (!isAbsolute(input.directory))
+      throw new RunnerError("Dataset directory must be an absolute local path");
+    if (!input.name.trim() || !input.source.trim() || !input.license.trim())
+      throw new RunnerError("Dataset requires name, source and license");
+    const limits = { ...LOCAL_DATASET_LIMITS, ...input.limits };
+    // Import-specific budgets may tighten the supported local execution ceiling.
+    for (const key of ["maxFileBytes", "maxTreeBytes", "maxFiles"] as const)
+      if (
+        !Number.isSafeInteger(limits[key]) ||
+        limits[key] < 1 ||
+        limits[key] > LOCAL_DATASET_LIMITS[key]
+      )
+        throw new RunnerError(
+          `Dataset ${key} must be between 1 and ${LOCAL_DATASET_LIMITS[key]}`,
+        );
+    const target = this.datasetDir(input.labId, input.id);
+    if (await exists(target)) {
+      const previous = await this.getDataset(input.labId, input.id);
+      if (
+        previous.name !== input.name ||
+        previous.version !== input.version ||
+        previous.source !== input.source ||
+        previous.license !== input.license ||
+        previous.description !== input.description ||
+        JSON.stringify(previous.splits) !== JSON.stringify(input.splits)
+      )
+        throw new RunnerError(
+          "Dataset version is immutable; create a new version identifier",
+          "conflict",
+        );
+      await this.verifyDataset(input.labId, input.id);
+      return previous;
+    }
+    const sourceStat = await lstat(input.directory);
+    if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink())
+      throw new RunnerError("Dataset sources must be real directories");
+    // Canonicalize OS aliases such as macOS /var before enforcing child-path boundaries.
+    const directory = await realpath(input.directory);
+    const files = await listFiles(directory, limits);
+    if (!files.length)
+      throw new RunnerError("Dataset requires at least one file");
+    await ensureDirectory(this.root, `labs/${safeId(input.labId)}/datasets`);
+    const temporary = `${target}.pending-${randomUUID()}`;
+    await mkdir(temporary);
+    try {
+      await copyVerified(directory, join(temporary, "files"), files, limits);
+      const sha256 = digest(
+        JSON.stringify({
+          name: input.name,
+          source: input.source,
+          license: input.license,
+          version: input.version,
+          description: input.description,
+          splits: input.splits,
+          files,
+        }),
+      );
+      const manifest: DatasetManifest = {
+        schemaVersion: 1,
+        labId: input.labId,
+        id: input.id,
+        name: input.name,
+        source: input.source,
+        license: input.license,
+        createdAt: new Date().toISOString(),
+        files,
+        sha256,
+        version: input.version,
+        description: input.description,
+        splits: input.splits,
+        author: input.author,
+      };
+      await atomicJson(join(temporary, "manifest.json"), manifest);
+      await rename(temporary, target);
+      return manifest;
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  }
+  async verifyDataset(labId: string, id: string): Promise<void> {
+    const manifest = await this.getDataset(labId, id);
+    if (manifest.labId !== labId || manifest.id !== id)
+      throw new RunnerError(
+        "Dataset identity does not match its directory",
+        "conflict",
+      );
+    const root = join(this.datasetDir(labId, id), "files");
+    for (const file of manifest.files) {
+      const actual = await hashFile(
+        root,
+        file.path,
+        LOCAL_DATASET_LIMITS.maxFileBytes,
+      );
+      if (actual.sha256 !== file.sha256 || actual.bytes !== file.bytes)
+        throw new RunnerError(
+          "Dataset file integrity check failed",
+          "conflict",
+        );
+    }
   }
   async readDatasetFile(
     labId: string,

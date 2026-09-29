@@ -7,6 +7,7 @@ import {
   resultPatchSchema,
   resultSchema,
 } from "@/lab/contracts";
+import { jsonPage, pageFields } from "@/lab/pico/tools/output";
 import type { ScientificKind } from "@/lab/research/laboratory";
 
 const kinds = z.enum([
@@ -19,7 +20,6 @@ const kinds = z.enum([
   "result",
   "conclusion",
 ]);
-const empty = z.object({}).strict();
 
 import type { ToolScope } from "@/lab/pico/tools/tool-definition";
 
@@ -30,15 +30,49 @@ export function registerResearchTools({
   labId,
   tool,
 }: ToolScope): void {
-  tool("read_lab", "Read laboratory records and current progress.", empty, () =>
-    research.overview(labId),
+  tool(
+    "read_lab",
+    "Read laboratory progress. Large outputs return JSON text pages; continue with nextOffset as offset. section selects one collection including events.",
+    z
+      .object({
+        ...pageFields,
+        section: z
+          .enum([
+            "lab",
+            "questions",
+            "hypotheses",
+            "experiments",
+            "runs",
+            "results",
+            "conclusions",
+            "papers",
+            "datasets",
+            "events",
+          ])
+          .optional(),
+      })
+      .strict(),
+    (input) => {
+      const overview = research.overview(labId);
+      return jsonPage(
+        input.section ? overview[input.section] : overview,
+        input.offset,
+        input.maxBytes,
+        input.fingerprint,
+      );
+    },
   );
   tool(
     "read_record",
-    "Read one scientific record by ID, scoped to this research.",
-    z.object({ kind: kinds, id }).strict(),
+    "Read one scientific record by ID. Large records return exact JSON text pages; continue with nextOffset as offset.",
+    z.object({ kind: kinds, id, ...pageFields }).strict(),
     (input) =>
-      research.getRecord(labId, input.kind as ScientificKind, input.id),
+      jsonPage(
+        research.getRecord(labId, input.kind as ScientificKind, input.id),
+        input.offset,
+        input.maxBytes,
+        input.fingerprint,
+      ),
   );
   tool(
     "create_question",

@@ -1,5 +1,10 @@
-import type { Json, Turn } from "@/lab/contracts";
-import type { ModelAdapter } from "@/lab/models/model-contract";
+import type { Json, ProviderConfig, Turn } from "@/lab/contracts";
+import {
+  isContextOverflow,
+  type ModelAdapter,
+  type ModelReply,
+  ModelResponseError,
+} from "@/lab/models/model-contract";
 import { complete } from "@/lab/models/model-gateway";
 import { context } from "@/lab/pico/context";
 import { demoReply } from "@/lab/pico/demo-narrator";
@@ -29,6 +34,36 @@ export async function runTurn(
     readTurn(lab, conversations, labId, id);
   const save = (value: Turn) => saveTurn(conversations, value);
   let turn = getTurn(initial.labId, initial.id);
+  const startStep = turn.steps;
+  let recoveryAttempts = 0;
+  const providerIdentity = (
+    config = lab.getLab(turn.labId).settings.provider,
+  ) => {
+    return `${config.mode}:${config.provider ?? config.baseUrl}:${config.model}`;
+  };
+  const minimumContextError =
+    "The provider context window cannot fit even the compact prompt and tool catalog. Choose a model with a larger context window before continuing; original messages and tool receipts remain preserved.";
+  const recoverOverflow = (config: ProviderConfig): boolean => {
+    const previous = turn.contextBudgetBytes ?? 100_000;
+    const reduced = Math.max(6_000, Math.floor(previous / 2));
+    turn = save({ ...turn, contextBudgetBytes: reduced });
+    if (reduced === previous || ++recoveryAttempts > 2) {
+      save({
+        ...turn,
+        status: "paused",
+        ...(reduced === previous
+          ? { contextBlockedFor: providerIdentity(config) }
+          : {}),
+        error:
+          reduced === previous
+            ? minimumContextError
+            : "The provider rejected the context. A smaller durable context budget is saved; continue to retry the compacted history.",
+        endedAt: now(),
+      });
+      return false;
+    }
+    return true;
+  };
   if (turn.status !== "queued") return;
   try {
     turn = save({
@@ -37,6 +72,21 @@ export async function runTurn(
       endedAt: null,
       error: null,
     });
+    if (turn.contextBlockedFor === providerIdentity()) {
+      save({
+        ...turn,
+        status: "paused",
+        error: minimumContextError,
+        endedAt: now(),
+      });
+      return;
+    }
+    if (turn.contextBlockedFor)
+      turn = save({
+        ...turn,
+        contextBlockedFor: undefined,
+        contextBudgetBytes: undefined,
+      });
     const tools = createTools(research, turn.labId, signal);
     // Completion is an analysis trigger, not an authorization for an unbounded run chain.
     if (turn.trigger === "run_completed") tools.delete("start_run");
@@ -74,7 +124,10 @@ export async function runTurn(
             toolCall: {
               ...call,
               status: "failed",
-              error: error instanceof Error ? error.message : String(error),
+              error: (error instanceof Error
+                ? error.message
+                : String(error)
+              ).slice(0, 3_000),
             },
           });
         }
@@ -89,23 +142,68 @@ export async function runTurn(
         });
         return;
       }
-      const config = lab.getLab(turn.labId).settings.provider;
-      const reply =
-        !adapter && config.mode === "demo"
-          ? demoReply(lab, turn)
-          : await (adapter ?? defaultAdapter ?? complete)({
-              config,
-              messages: context(lab, turn, conversations),
-              tools: [...tools.values()].map(
-                ({ name, description, parameters }) => ({
-                  name,
-                  description,
-                  parameters,
-                }),
-              ),
-              signal,
-              sessionId: turn.conversationId,
-            });
+      const settings = lab.getLab(turn.labId).settings;
+      const usage = conversations.modelUsage(turn.labId, turn.id, startStep);
+      const budget =
+        settings.maxModelTokens && usage.totalTokens >= settings.maxModelTokens
+          ? "observed token"
+          : settings.maxModelCostUsd &&
+              usage.costUsd >= settings.maxModelCostUsd
+            ? "observed cost"
+            : usage.calls &&
+                ((settings.maxModelTokens && !usage.tokensKnown) ||
+                  (settings.maxModelCostUsd && !usage.costKnown))
+              ? "usage reporting (the provider did not report the configured budget unit)"
+              : null;
+      if (budget) {
+        save({
+          ...turn,
+          status: "paused",
+          error: `Reached the ${budget} budget for this work block. Usage is measured after each response, so the last request can exceed the allowance. Continue grants another block.`,
+          endedAt: now(),
+        });
+        return;
+      }
+      const config = settings.provider;
+      let reply: ModelReply;
+      try {
+        reply =
+          !adapter && config.mode === "demo"
+            ? demoReply(lab, turn)
+            : await (adapter ?? defaultAdapter ?? complete)({
+                config,
+                messages: context(lab, turn, conversations),
+                tools: [...tools.values()].map(
+                  ({ name, description, parameters }) => ({
+                    name,
+                    description,
+                    parameters,
+                  }),
+                ),
+                signal,
+                sessionId: turn.conversationId,
+              });
+      } catch (error) {
+        if (error instanceof ModelResponseError) {
+          turn = persistReply(
+            conversations,
+            turn,
+            {
+              content: "",
+              calls: [],
+              error: error.message,
+              usage: error.usage,
+            },
+            config,
+            false,
+          ).turn;
+        }
+        if (!signal.aborted && isContextOverflow(error)) {
+          if (recoverOverflow(config)) continue;
+          return;
+        }
+        throw error;
+      }
       if (signal.aborted && !reply.native) break;
       const persisted = persistReply(
         conversations,
@@ -116,7 +214,13 @@ export async function runTurn(
       );
       turn = persisted.turn;
       if (signal.aborted) break;
-      if (persisted.error) throw new Error(persisted.error);
+      if (persisted.error) {
+        if (isContextOverflow(persisted.error)) {
+          if (recoverOverflow(config)) continue;
+          return;
+        }
+        throw new Error(persisted.error);
+      }
       if (!reply.calls.length) {
         save({ ...turn, status: "completed", endedAt: now() });
         return;

@@ -38,6 +38,42 @@ export interface ModelMessage {
   images?: { data: string; mimeType: string }[];
   native?: NativeTranscript;
 }
+export interface ReplayEntry {
+  messageIds: string[];
+  messages: ModelMessage[];
+}
+
+export class ModelContextOverflow extends Error {
+  constructor() {
+    super(
+      "Model context exceeds the provider window. Pico will compact preserved history before retrying.",
+    );
+    this.name = "ModelContextOverflow";
+  }
+}
+
+export class ModelResponseError extends Error {
+  constructor(
+    message: string,
+    readonly usage?: JsonObject,
+  ) {
+    super(message);
+    this.name = "ModelResponseError";
+  }
+}
+
+/** Classify only; never expose arbitrary provider errors or credential echoes. */
+export function isContextOverflow(value: unknown): boolean {
+  const text =
+    typeof value === "string"
+      ? value
+      : value instanceof Error
+        ? value.message
+        : "";
+  return /context[_ ](?:length[_ ]exceeded|window|overflow)|context.{0,24}exceed|maximum context|prompt (?:is )?too (?:long|large)|too many (?:input )?tokens|input (?:length|tokens).{0,30}(?:exceed|limit)/i.test(
+    text,
+  );
+}
 export type ModelAdapter = (input: {
   config: ProviderConfig;
   messages: ModelMessage[];

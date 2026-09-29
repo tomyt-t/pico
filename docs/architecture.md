@@ -28,8 +28,11 @@ flowchart LR
 ~~~
 
 A sessão é uma conversa lógica durável, com turnos serializados. Jobs podem
-continuar enquanto o pesquisador conversa. O resultado de um job volta à mesma
-conversa através de evento persistido e deduplicado.
+continuar enquanto o pesquisador conversa e novas mensagens podem entrar na fila.
+Pedidos do pesquisador têm precedência sobre análises automáticas ainda enfileiradas.
+O resultado de um job volta à mesma conversa através de evento persistido e
+deduplicado. Condições de um lote são analisadas juntas quando não restam runs
+queued/running no laboratório; as observações já ficam acessíveis antes disso.
 
 ## Entidades e relações
 
@@ -112,10 +115,34 @@ As tools são adaptadores pequenos sobre operações do domínio. Não expõem e
 arbitrária no banco. Comandos relacionados podem ser agrupados em uma operação
 atômica quando isso evita estados científicos incompletos.
 
-O contexto de Pico reúne direção do lab, resumo incremental da investigação,
-mensagens recentes e registros recuperados por demanda. O histórico original
-continua preservado. O orçamento de um turno é explícito e deve permitir uma
-pausa compreensível com trabalho registrado.
+O contexto começa com instruções estáveis, resumo do notebook e checkpoint
+extrativo, seguidos de grupos completos de histórico; o índice mutável do lab,
+a data UTC e o pedido atual ficam ao final. Pedidos recentes do pesquisador
+também permanecem explícitos, mesmo após muitos eventos de execução.
+
+O checkpoint extrativo guarda trechos e IDs, sem produzir uma nova interpretação
+científica. Seu cursor e conteúdo são gravados juntos; não avançam sobre pedidos
+queued ainda não vistos nem grupos de tools pendentes. `summaryThroughMessageId`
+é aplicado ao replay e o checkpoint automático tem cursor próprio. Nenhum deles
+apaga mensagens, respostas nativas, assinaturas ou recibos. Uma resposta nativa
+grande demais é retirada do replay como grupo inteiro e continua preservada.
+
+As tools devolvem no máximo 24.000 bytes serializados. Leituras extensas usam
+offset UTF-8, `nextOffset` e fingerprint SHA-256; uma mudança da origem invalida
+a continuação, impedindo misturar revisões. Binários retornam metadados. Recibos
+de mutações conservam o sucesso e o ID do registro mesmo quando sua projeção é
+abreviada. Resultados legados também são limitados no replay, sem alterar a
+resposta assinada do assistente. Erros de janela de contexto reduzem um orçamento
+persistido e tentam uma projeção menor; uma janela insuficiente para as próprias
+instruções/tools requer trocar o modelo, com todo o trabalho anterior preservado.
+
+Cada bloco de trabalho limita passos e pode limitar tokens/custo observados.
+O consumo agrega as respostas persistidas, inclusive respostas recusadas ou
+interrompidas que informem uso. Ausência de preço/tokens é desconhecimento,
+nunca custo zero comprovado. A pausa ocorre antes da próxima chamada quando o
+limite foi atingido ou a unidade configurada não foi informada; uma resposta
+pode ultrapassar a franquia. Continuar concede outro bloco e mantém o consumo
+acumulado. Isso não constitui um teto financeiro pré-pago.
 
 ## Persistência e recuperação
 
@@ -153,9 +180,15 @@ início e resultado e reconciliar o estado após interrupções. Executar códig
 um efeito externo: se o estado após falha for ambíguo, verificar processo e
 arquivos existentes antes de iniciar outra tentativa.
 
-A entrega de eventos é deduplicada. O término de um run torna-se observável
-antes de solicitar uma nova análise a Pico. Uma falha do modelo não perde as
-observações do experimento.
+A entrega de eventos é deduplicada por todos os `eventIds`, inclusive eventos
+secundários de um lote após reinício. Consumo, mensagem e associação ao turno
+compartilham a transação. Apenas turnos queued recebem novos eventos; `eventRuns`
+preserva todas as referências, pagináveis por `read_turn`. Mensagens de observação
+entram no modelo como dados, sem autoridade system, e mantêm `eventId` para a
+UI identificar autoria do laboratório. Esses turnos não recebem `start_run`.
+O término torna-se observável antes de solicitar análise a Pico; falhas do modelo
+não perdem as observações. Um run com estado incerto pode adiar o lote até a
+reconciliação, e o pesquisador pode pedir uma análise parcial explicitamente.
 
 ## Execuções e reprodução
 
@@ -182,10 +215,17 @@ quando o uso exigir.
 
 ## Interface
 
-- Chat: investigação, decisões e informes de execução.
-- Overview: perguntas, entendimento atual, trabalho em andamento e interrupções.
-- Experiments: planos, tentativas, comparação, código e reprodução.
-- Library: papers e datasets, com origem e utilização.
+- Conversa: investigação, decisões e informes de execução.
+- Visão geral: perguntas, entendimento atual, trabalho em andamento e
+  interrupções.
+- Experimentos: planos, tentativas, comparação, código e reprodução.
+- Biblioteca: papers e datasets, com origem e utilização.
+
+A interface está disponível em português do Brasil (`pt-BR`, padrão) e inglês
+(`en`), com react-i18next. O botão de idioma na barra superior troca textos,
+datas e números sem recarregar; a escolha fica no navegador, como o tema.
+Mensagens produzidas pelo servidor, como eventos e erros, e os nomes técnicos
+de tools, métricas e arquivos permanecem como registrados.
 
 A UI lê as projeções do lab por consultas periódicas enquanto a página está
 visível. Eventos persistidos ligam o executor à sessão; não exigem conexão aberta

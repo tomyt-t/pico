@@ -1,7 +1,8 @@
 import type { LabOverview } from "@pico/lab/contracts";
 import { useState } from "react";
 import { routePath } from "@/web/app/navigation";
-import { timestamp } from "@/web/components/format";
+import { statusLabel, timestamp } from "@/web/components/format";
+import { Trans, useTranslation } from "@/web/components/i18n";
 import { Empty, Icon, PageHeading, Status } from "@/web/components/primitives";
 import { QueryState } from "@/web/components/query-state";
 import { useExperimentsOverview } from "@/web/features/experiments/experiment-queries";
@@ -27,6 +28,7 @@ export function Experiments({
   const [status, setStatus] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [comparing, setComparing] = useState(false);
+  const { t } = useTranslation();
   if (id)
     return (
       <ExperimentWorkspace
@@ -52,25 +54,20 @@ export function Experiments({
   return (
     <div className="page">
       <PageHeading
-        eyebrow="Experiment workspace"
-        title="From ideas to observations."
+        eyebrow={t("experiments.eyebrow")}
+        title={t("experiments.title")}
         action={
           <button
             className="primary"
             type="button"
-            onClick={() =>
-              discuss(
-                "Let's prepare a new experiment. Review the questions we have and help me define its objective, protocol and inputs.",
-              )
-            }
+            onClick={() => discuss(t("experiments.planPrompt"))}
           >
             <Icon name="plus" size={15} />
-            Plan with Pico
+            {t("experiments.plan")}
           </button>
         }
       >
-        Protocols, code and every attempt, connected to the questions they
-        investigate.
+        {t("experiments.subtitle")}
       </PageHeading>
       {comparing ? (
         <RunComparison
@@ -83,23 +80,23 @@ export function Experiments({
         <>
           <div className="toolbar">
             <label className="sr-only" htmlFor="experiment-search">
-              Search experiments
+              {t("experiments.search")}
             </label>
             <input
               id="experiment-search"
               type="search"
-              placeholder="Search experiments…"
+              placeholder={t("experiments.searchPlaceholder")}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
             <label>
-              <span className="sr-only">Question</span>
+              <span className="sr-only">{t("experiments.question")}</span>
               <select
-                aria-label="Filter by question"
+                aria-label={t("experiments.filterQuestion")}
                 value={question}
                 onChange={(event) => setQuestion(event.target.value)}
               >
-                <option value="">All questions</option>
+                <option value="">{t("experiments.allQuestions")}</option>
                 {overview.questions.map((entry) => (
                   <option key={entry.id} value={entry.id}>
                     {entry.text}
@@ -108,13 +105,13 @@ export function Experiments({
               </select>
             </label>
             <label>
-              <span className="sr-only">Status</span>
+              <span className="sr-only">{t("experiments.status")}</span>
               <select
-                aria-label="Filter by status"
+                aria-label={t("experiments.filterStatus")}
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
               >
-                <option value="">All statuses</option>
+                <option value="">{t("experiments.allStatuses")}</option>
                 {[
                   "draft",
                   "ready",
@@ -125,7 +122,7 @@ export function Experiments({
                   "archived",
                 ].map((value) => (
                   <option key={value} value={value}>
-                    {value.replace(/^./, (c) => c.toUpperCase())}
+                    {statusLabel(value)}
                   </option>
                 ))}
               </select>
@@ -134,16 +131,18 @@ export function Experiments({
           <div className="panel experiment-list">
             {entries.length ? (
               <div className="table-scroll">
-                <table className="data-table">
+                <table className="data-table experiment-table">
                   <thead>
                     <tr>
                       <th>
-                        <span className="sr-only">Compare</span>
+                        <span className="sr-only">
+                          {t("experiments.compare")}
+                        </span>
                       </th>
-                      <th>Experiment</th>
-                      <th>Status</th>
-                      <th>Latest attempt</th>
-                      <th>Updated</th>
+                      <th>{t("experiments.experiment")}</th>
+                      <th>{t("experiments.status")}</th>
+                      <th>{t("experiments.latestAttempt")}</th>
+                      <th>{t("experiments.updated")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -154,7 +153,9 @@ export function Experiments({
                           <td>
                             <input
                               type="checkbox"
-                              aria-label={`Select latest run of ${entry.title} for comparison`}
+                              aria-label={t("experiments.selectLatest", {
+                                title: entry.title,
+                              })}
                               checked={!!run && selected.includes(run.id)}
                               disabled={
                                 !run ||
@@ -185,8 +186,8 @@ export function Experiments({
                             </h3>
                             <div className="meta">
                               {entry.hypothesisIds.length
-                                ? "Hypothesis test"
-                                : "Exploratory"}{" "}
+                                ? t("common.hypothesisTest")
+                                : t("common.exploratory")}{" "}
                               ·{" "}
                               {entry.questionIds
                                 .map(
@@ -196,7 +197,7 @@ export function Experiments({
                                     )?.text,
                                 )
                                 .filter(Boolean)
-                                .join(" · ") || "No linked question"}
+                                .join(" · ") || t("common.noLinkedQuestion")}
                             </div>
                           </td>
                           <td>
@@ -213,14 +214,18 @@ export function Experiments({
                                     tab: "runs",
                                   })}
                                 >
-                                  Attempt {run.attempt}
+                                  {t("common.attempt", {
+                                    attempt: run.attempt,
+                                  })}
                                 </a>
                                 <div style={{ marginTop: 5 }}>
                                   <Status value={run.status} />
                                 </div>
                               </>
                             ) : (
-                              <span className="meta">Not run yet</span>
+                              <span className="meta">
+                                {t("experiments.notRun")}
+                              </span>
                             )}
                           </td>
                           <td className="meta">{timestamp(entry.updatedAt)}</td>
@@ -234,20 +239,20 @@ export function Experiments({
               <Empty
                 title={
                   overview.experiments.length
-                    ? "No experiments match these filters"
-                    : "Your first experiment starts with a plan"
+                    ? t("experiments.noMatch")
+                    : t("experiments.firstExperiment")
                 }
               >
                 {overview.experiments.length
-                  ? "Try another question, status or search term."
-                  : "Discuss a question with Pico to create an exploratory experiment or a hypothesis test."}
+                  ? t("experiments.noMatchBody")
+                  : t("experiments.firstExperimentBody")}
               </Empty>
             )}
           </div>
           {selected.length > 0 && (
             <div className="comparison">
               <span className="meta">
-                {selected.length} executions selected · choose 2–4
+                {t("experiments.selected", { count: selected.length })}
               </span>
               <div className="actions">
                 <button
@@ -255,7 +260,7 @@ export function Experiments({
                   type="button"
                   onClick={() => setSelected([])}
                 >
-                  Clear
+                  {t("experiments.clear")}
                 </button>
                 <button
                   className="primary small"
@@ -263,25 +268,30 @@ export function Experiments({
                   disabled={selected.length < 2}
                   onClick={() => setComparing(true)}
                 >
-                  Compare runs
+                  {t("experiments.compareRuns")}
                 </button>
               </div>
             </div>
           )}
           {overview.runs.length >= 2 && !selected.length && (
             <p className="meta" style={{ marginTop: 16 }}>
-              Select experiments to compare their latest runs, or{" "}
-              <button
-                className="text-button"
-                type="button"
-                onClick={() => {
-                  setSelected(overview.runs.slice(0, 2).map((run) => run.id));
-                  setComparing(true);
+              <Trans
+                i18nKey="experiments.compareHint"
+                components={{
+                  choose: (
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() => {
+                        setSelected(
+                          overview.runs.slice(0, 2).map((run) => run.id),
+                        );
+                        setComparing(true);
+                      }}
+                    />
+                  ),
                 }}
-              >
-                choose any two executions
-              </button>
-              , including attempts of the same experiment.
+              />
             </p>
           )}
         </>
