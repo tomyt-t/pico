@@ -1,0 +1,341 @@
+.page-blocks {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+  max-width: 100%;
+}
+.page-block {
+  min-width: 0;
+}
+.page-block > .notice {
+  margin-bottom: 12px;
+}
+.page-alternative {
+  min-width: 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.page-alternative summary {
+  color: var(--secondary);
+  cursor: pointer;
+  font-size: var(--text-sm);
+}
+.page-alternative > .markdown {
+  margin-top: 18px;
+}
+.page-blocks :is(.markdown, .record-list, .table-scroll, .code) {
+  min-width: 0;
+  max-width: 100%;
+}
+.page-blocks .markdown :is(pre, table) {
+  max-width: 100%;
+}
+.page-blocks .record-heading {
+  flex-wrap: wrap;
+}
+.page-blocks .record-heading h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.page-record-missing {
+  padding: 16px 0;
+  overflow-wrap: anywhere;
+}
+.page-record-missing + .page-record-missing {
+  border-top: 1px solid var(--border);
+}
+.page-record-missing .meta {
+  margin-top: 6px;
+}
+/* --- a page read as a document --- */
+/* On its own, the reading column sits in the middle of the page; beside the
+   Panorama's table of contents it keeps to the left (pages.css). */
+.page-reading {
+  max-width: 960px;
+}
+.document {
+  max-width: 880px;
+  min-width: 0;
+}
+.document > *,
+.document .page-block > :not(.page-artifact) {
+  max-width: 680px;
+}
+.document > .page-blocks {
+  max-width: 880px;
+}
+.document-head {
+  margin-bottom: 22px;
+}
+.document-head h1 {
+  margin: 0 0 12px;
+  font-size: 36px;
+  line-height: 1.12;
+  letter-spacing: -0.022em;
+  overflow-wrap: anywhere;
+}
+.document-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.document-byline b {
+  font-weight: 500;
+  color: var(--secondary);
+}
+.document-byline .text-button {
+  font-size: var(--text-xs);
+  color: var(--accent-ink);
+}
+.document .editorial-notice {
+  padding: 9px 0;
+  margin: 0 0 30px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: none;
+}
+.document .page-blocks {
+  gap: 0;
+}
+.document .markdown {
+  font-size: 15.5px;
+  line-height: 1.72;
+}
+.document .markdown > * {
+  max-width: none;
+}
+.document .markdown p,
+.document .markdown ul,
+.document .markdown ol {
+  margin: 0 0 18px;
+}
+.document .markdown h2 {
+  margin: 46px 0 12px;
+  font-size: 23px;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+.document .page-block:first-child .markdown > h2:first-child {
+  margin-top: 0;
+}
+.document .markdown h3 {
+  margin: 28px 0 8px;
+  font-size: 16.5px;
+}
+.document .markdown table {
+  display: table;
+  width: 100%;
+  margin: 0 0 20px;
+}
+.document .markdown th {
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--border-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.document .markdown td {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+.page-lead .markdown > p:first-child {
+  margin-bottom: 24px;
+  font-size: 18.5px;
+  line-height: 1.55;
+  color: var(--secondary);
+}
+.page-lead .markdown > p:first-child strong {
+  color: var(--ink);
+}
+.markdown .aside {
+  margin: 8px 0 26px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--info);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--info-soft);
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.markdown .aside.is-warn {
+  border-left-color: var(--warning);
+  background: var(--warning-soft);
+}
+.markdown .aside > p {
+  margin: 0;
+}
+.markdown .aside > p + p {
+  margin-top: 8px;
+}
+.evidence {
+  margin: 4px 0 26px;
+  padding-left: 14px;
+  border-left: 2px solid var(--accent-soft);
+}
+.evidence-label {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.evidence-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 5px 0;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+.evidence-row:hover {
+  text-decoration: none;
+}
+.evidence-row:hover .evidence-title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.evidence-kind {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.evidence-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.evidence-when {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.evidence-row.is-superseded .evidence-title {
+  color: var(--secondary);
+  text-decoration: line-through;
+  text-decoration-color: var(--border-strong);
+}
+.evidence-row.is-superseded .evidence-when {
+  color: var(--warning);
+}
+.evidence-row.is-missing .evidence-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.page-artifact {
+  margin: 26px 0 30px;
+  min-width: 0;
+}
+.page-artifact .image-preview {
+  padding: 0;
+}
+.page-artifact .image-preview img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.page-artifact figcaption {
+  max-width: 680px;
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--secondary);
+  overflow-wrap: anywhere;
+}
+.page-artifact figcaption b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.figure-source {
+  margin-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.document .page-alternative,
+.document .revisions {
+  margin-top: 28px;
+}
+.editorial-notice summary {
+  cursor: pointer;
+}
+.editorial-shape {
+  color: var(--secondary);
+}
+@media (max-width: 760px) {
+  .document-head h1 {
+    font-size: 28px;
+  }
+  .document .markdown h2 {
+    font-size: 20px;
+  }
+  .evidence-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .evidence-kind {
+    grid-column: 1 / -1;
+  }
+}
+.editorial-notice {
+  padding: 10px 14px;
+  margin-bottom: 24px;
+  background: var(--tint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+.editorial-notice-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+.editorial-notice-line strong {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--ink);
+}
+.editorial-notice-line .icon {
+  flex: none;
+  color: var(--muted);
+}
+.editorial-notice.pending .editorial-notice-line .icon {
+  color: var(--warning);
+}
+.editorial-notice p,
+.editorial-notice details {
+  margin-top: 10px;
+}
+.editorial-notice ul {
+  padding-left: 20px;
+  margin-top: 10px;
+}
+.editorial-references {
+  max-height: 240px;
+  overflow: auto;
+}
+@media (max-width: 760px) {
+  .editorial-notice-heading {
+    align-items: flex-start;
+  }
+}

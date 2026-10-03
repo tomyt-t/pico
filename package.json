@@ -1,40 +1,27 @@
 {
   "name": "pico",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.4.0",
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
-    "dev": "bun scripts/dev.ts",
-    "dev:server": "bun --watch apps/server/src/main.ts",
-    "dev:web": "bun run --cwd apps/web dev",
-    "start": "bun apps/server/src/main.ts",
-    "pi": "bun scripts/pi.ts",
-    "build": "bun run --cwd apps/web build",
-    "test": "bun test apps packages tests",
-    "typecheck": "bun scripts/typecheck.ts",
+    "dev": "bun server/src/dev.ts",
+    "start": "bun server/src/main.ts",
+    "pi": "bun server/src/pi.ts",
+    "build": "bun run --cwd web build",
+    "test": "bun test server web",
+    "typecheck": "bun x --no-install tsc -p server/tsconfig.json && bun x --no-install tsc -p web/tsconfig.json && bun x --no-install tsc -p web/tests/tsconfig.json",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "check": "bun run typecheck && bun run lint && bun test apps packages tests && bun run build"
-  },
-  "dependencies": {
-    "@pico/lab": "workspace:*",
-    "@pico/runner": "workspace:*",
-    "@pico/server": "workspace:*",
-    "@pico/web": "workspace:*"
+    "check": "bun run typecheck && bun run lint && bun run test && bun run build"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@types/bun": "1.4.0",
-    "@types/react": "19.1.8",
-    "@types/react-dom": "19.1.6",
-    "@vitejs/plugin-react": "5.0.0",
-    "chrome-devtools-mcp": "1.10.1",
-    "typescript": "7.0.2",
-    "vite": "7.1.0"
-  },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+    "typescript": "7.0.2"
+  }
 }

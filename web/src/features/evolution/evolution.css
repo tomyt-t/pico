@@ -1,0 +1,196 @@
+/* Evolução: a changelog of the research. Days carry the headings; each change
+   takes two lines, with the full text and the comparison folded underneath. */
+.evolution-toolbar {
+  margin-bottom: 8px;
+  row-gap: 8px;
+}
+.evolution-toolbar .toolbar-spacer {
+  flex: 1;
+}
+.evolution-scope {
+  margin: 28px 0 0;
+}
+.evolution-day {
+  margin-top: 22px;
+}
+.evolution-day-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 10px 0 8px;
+  background: var(--bg);
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.evolution-feed {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.evolution-entry {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 0 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.evolution-entry:last-child {
+  border-bottom: 0;
+}
+.evolution-time {
+  padding-top: 3px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.evolution-body {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.evolution-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.evolution-title {
+  font-weight: 500;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.evolution-excerpt {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--secondary);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.evolution-excerpt.is-reason {
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  color: var(--ink);
+}
+.evolution-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+}
+.evolution-entry.is-job .evolution-body {
+  gap: 0;
+}
+.evolution-entry.is-job .record-row {
+  margin: -7px -8px;
+}
+.evolution-entry.is-job .record-row > .meta {
+  display: none;
+}
+.evolution-versions {
+  margin-top: 4px;
+}
+.evolution-versions > summary,
+.evolution-full-versions > summary {
+  cursor: pointer;
+  color: var(--secondary);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+.evolution-versions[open] > summary {
+  margin-bottom: 12px;
+}
+.evolution-content {
+  display: grid;
+  gap: 12px;
+}
+.evolution-diff {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+.evolution-diff-title .eyebrow {
+  display: inline;
+  margin: 0 6px 0 0;
+}
+.evolution-diff ins,
+.evolution-diff del {
+  border-radius: 3px;
+  padding: 0 2px;
+  text-decoration: none;
+}
+.evolution-diff ins {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.evolution-diff del {
+  background: var(--danger-soft);
+  color: var(--danger);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in oklab, var(--danger), transparent 50%);
+}
+.evolution-full-versions {
+  margin-top: 4px;
+}
+.evolution-snapshots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+.evolution-snapshot {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+}
+.evolution-snapshot h3 {
+  margin: 0 0 12px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+.evolution-snapshot > strong {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-bottom: 8px;
+}
+.evolution-references {
+  margin-top: 4px;
+}
+.evolution-actions {
+  margin-top: 14px;
+}
+.has-chat-dock .evolution-snapshots {
+  grid-template-columns: 1fr;
+}
+@media (max-width: 760px) {
+  .evolution-snapshots {
+    grid-template-columns: 1fr;
+  }
+  .evolution-entry {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .evolution-time {
+    padding-top: 0;
+  }
+}

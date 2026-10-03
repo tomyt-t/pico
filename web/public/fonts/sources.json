@@ -1,0 +1,16 @@
+[
+  {
+    "name": "dm-sans",
+    "css_source": "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400..700&display=swap",
+    "asset_source": "https://fonts.gstatic.com/s/dmsans/v17/rP2Yp2ywxg089UriI5-g4vlH9VoD8Cmcqbu0-K6z9mXg.woff2",
+    "license_source": "https://raw.githubusercontent.com/google/fonts/main/ofl/dmsans/OFL.txt",
+    "bytes": 36980
+  },
+  {
+    "name": "manrope",
+    "css_source": "https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&display=swap",
+    "asset_source": "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSvfedN4.woff2",
+    "license_source": "https://raw.githubusercontent.com/google/fonts/main/ofl/manrope/OFL.txt",
+    "bytes": 24576
+  }
+]

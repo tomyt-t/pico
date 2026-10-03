@@ -1,0 +1,238 @@
+/* Frentes: the questions on top, then one card per front. */
+.question-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.question-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 0;
+  transition: border-color var(--ease);
+}
+.question-card:hover {
+  text-decoration: none;
+  border-color: var(--border-strong);
+}
+.question-card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.question-card strong {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.front-no-questions {
+  margin: -6px 0 18px;
+}
+.fronts-toolbar {
+  margin-bottom: 14px;
+}
+.front-list {
+  display: grid;
+  gap: 10px;
+}
+.front-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 0 16px;
+  padding: 14px 18px 14px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+}
+.front-card.is-busy {
+  border-left-color: var(--st-busy);
+}
+.front-card.is-draft {
+  border-left-color: var(--st-waiting);
+}
+.front-card.is-done {
+  border-left-color: var(--st-done);
+}
+.front-card.is-superseded {
+  border-left-color: var(--border);
+}
+.front-card.is-superseded .front-title a {
+  color: var(--secondary);
+}
+.front-number {
+  padding-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.front-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.front-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+.front-title a {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.front-finding {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  color: var(--secondary);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.front-finding b {
+  font-weight: 600;
+  color: var(--ink);
+}
+.front-side {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+  align-content: start;
+  max-width: 220px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.front-side > time {
+  white-space: nowrap;
+}
+.front-eyebrow .chip {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.front-jobs {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.front-job-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+.front-job-dots .dot {
+  width: 7px;
+  height: 7px;
+  animation: none;
+}
+
+/* One front: the finding before the protocol, then materials, executions and
+   the three side cards. */
+.front-finding-block {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--accent-soft);
+}
+.front-finding-block p {
+  margin: 6px 0 8px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.front-finding-block b {
+  font-weight: 600;
+}
+.front-sections {
+  display: grid;
+  gap: 22px;
+  margin-top: 8px;
+}
+.front-sections > section > .eyebrow {
+  margin-bottom: 6px;
+}
+.front-aside {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.front-aside-card {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+}
+.front-aside-card h3 {
+  margin: 0 0 10px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.front-aside-card .text-button {
+  margin-top: 10px;
+  font-size: var(--text-xs);
+}
+.front-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: var(--text-xs);
+}
+.front-timeline li {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.front-timeline time {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.front-files {
+  display: grid;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+.front-files a {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.front-aside-card .chip-row {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .front-card {
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding: 12px 14px 12px 12px;
+  }
+  .front-side {
+    grid-column: 2;
+    grid-auto-flow: column;
+    justify-items: start;
+    gap: 12px;
+    margin-top: 8px;
+    white-space: normal;
+  }
+}

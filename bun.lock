@@ -4,37 +4,29 @@
   "workspaces": {
     "": {
       "name": "pico",
-      "dependencies": {
-        "@pico/lab": "workspace:*",
-        "@pico/runner": "workspace:*",
-        "@pico/server": "workspace:*",
-        "@pico/web": "workspace:*",
-      },
       "devDependencies": {
         "@biomejs/biome": "2.5.14",
         "@types/bun": "1.4.0",
-        "@types/react": "19.1.8",
-        "@types/react-dom": "19.1.6",
-        "@vitejs/plugin-react": "5.0.0",
-        "chrome-devtools-mcp": "1.10.1",
         "typescript": "7.0.2",
-        "vite": "7.1.0",
       },
     },
-    "apps/server": {
+    "server": {
       "name": "@pico/server",
       "dependencies": {
-        "@pico/lab": "workspace:*",
-        "zod": "4.1.12",
+        "@earendil-works/pi-agent-core": "0.86.1",
+        "@earendil-works/pi-ai": "0.86.1",
+        "@earendil-works/pi-coding-agent": "0.86.1",
+        "pi-web-access": "0.30.0",
+        "typebox": "1.3.27",
+        "unpdf": "1.8.1",
       },
     },
-    "apps/web": {
+    "web": {
       "name": "@pico/web",
       "version": "0.1.0",
       "dependencies": {
         "@fontsource/ibm-plex-mono": "5.3.0",
         "@fontsource/ibm-plex-sans": "5.3.0",
-        "@pico/lab": "workspace:*",
         "hast-util-to-jsx-runtime": "2.3.6",
         "i18next": "26.4.2",
         "react": "19.1.0",
@@ -45,25 +37,12 @@
         "shiki": "4.4.3",
       },
       "devDependencies": {
+        "@pico/server": "workspace:*",
         "@types/react": "19.1.8",
         "@types/react-dom": "19.1.6",
         "@vitejs/plugin-react": "5.0.0",
         "vite": "7.1.0",
       },
-    },
-    "packages/lab": {
-      "name": "@pico/lab",
-      "dependencies": {
-        "@earendil-works/pi-ai": "0.86.1",
-        "@earendil-works/pi-coding-agent": "0.86.1",
-        "@pico/runner": "workspace:*",
-        "pi-web-access": "0.30.0",
-        "zod": "4.1.12",
-      },
-    },
-    "packages/runner": {
-      "name": "@pico/runner",
-      "version": "0.1.0",
     },
   },
   "packages": {
@@ -251,13 +230,9 @@
 
     "@napi-rs/lzma-linux-x64-gnu": ["@napi-rs/lzma-linux-x64-gnu@1.5.1", "", { "os": "linux", "cpu": "x64" }, "sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ=="],
 
-    "@pico/lab": ["@pico/lab@workspace:packages/lab"],
+    "@pico/server": ["@pico/server@workspace:server"],
 
-    "@pico/runner": ["@pico/runner@workspace:packages/runner"],
-
-    "@pico/server": ["@pico/server@workspace:apps/server"],
-
-    "@pico/web": ["@pico/web@workspace:apps/web"],
+    "@pico/web": ["@pico/web@workspace:web"],
 
     "@protobufjs/aspromise": ["@protobufjs/aspromise@1.1.2", "", {}, "sha512-j+gKExEuLmKwvz3OgROXtrJ2UG2x8Ch2YZUxahh+s1F2HZ+wAceUNLkvy6zKCPVRkU++ZWQrdxsUeQXmcg4uoQ=="],
 
@@ -490,8 +465,6 @@
     "character-entities-legacy": ["character-entities-legacy@3.0.0", "", {}, "sha512-RpPp0asT/6ufRm//AJVwpViZbGM/MkjQFxJccQRHmISF/22NBtsHqAWmL+/pmkPWoIUJdWyeVleTl1wydHATVQ=="],
 
     "character-reference-invalid": ["character-reference-invalid@2.0.1", "", {}, "sha512-iBZ4F4wRbyORVsu0jPV7gXkOsGYjGHPmAyv+HiHG8gi5PtC9KI2j1+v8/tlibRvjoWX027ypmG/n0HtO5t7unw=="],
-
-    "chrome-devtools-mcp": ["chrome-devtools-mcp@1.10.1", "", { "peerDependencies": { "@blackwell-systems/gcf": "^2.2.2", "@toon-format/toon": "^4.1.0" }, "optionalPeers": ["@blackwell-systems/gcf", "@toon-format/toon"], "bin": { "chrome-devtools": "build/src/bin/chrome-devtools.js", "chrome-devtools-mcp": "build/src/bin/chrome-devtools-mcp.js" } }, "sha512-Klw6HWDqHC/XS1JwZldd2r49aUhbUJN9m9Mvcx4SEueIPXtzuQX+QelxAViobv8YUkDZ7HWDrmViR6LeYK0wAw=="],
 
     "comma-separated-tokens": ["comma-separated-tokens@2.0.3", "", {}, "sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg=="],
 
@@ -1062,8 +1035,6 @@
     "yaml": ["yaml@2.9.0", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA=="],
 
     "yocto-queue": ["yocto-queue@1.2.2", "", {}, "sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ=="],
-
-    "zod": ["zod@4.1.12", "", {}, "sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ=="],
 
     "zwitch": ["zwitch@2.0.4", "", {}, "sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A=="],
 

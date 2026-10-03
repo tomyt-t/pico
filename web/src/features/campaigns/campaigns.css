@@ -1,0 +1,403 @@
+/* Campaign cards in the activity panel: one card per campaign, instances as rows inside. */
+.campaign-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.campaign-card {
+  --c: var(--st-busy);
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.campaign-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--c);
+}
+.campaign-card.is-waiting {
+  --c: var(--st-waiting);
+}
+.campaign-card.is-pending {
+  --c: var(--st-pending);
+}
+.campaign-card.is-paused {
+  --c: var(--st-paused);
+}
+.campaign-card.is-error {
+  --c: var(--st-error);
+}
+.campaign-card.is-done {
+  --c: var(--st-done);
+}
+.campaign-card.is-idle {
+  --c: var(--border-strong);
+}
+.campaign-main {
+  display: flex;
+  align-items: flex-start;
+}
+button.campaign-open {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 10px 8px 10px 13px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-weight: 400;
+}
+button.campaign-open:hover:not(:disabled) {
+  background: var(--tint);
+}
+.campaign-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.campaign-state {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.campaign-state .dot {
+  margin-left: 1px;
+}
+.campaign-meta {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.campaign-open .meter {
+  margin-top: 2px;
+}
+button.campaign-expand {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin: 6px 6px 0 0;
+  padding: 4px;
+}
+.campaign-expand[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.campaign-children {
+  border-top: 1px solid var(--border);
+  background: var(--tint);
+}
+.campaign-children[hidden] {
+  display: none;
+}
+.campaign-children .agent-row {
+  padding-left: 13px;
+}
+.campaign-standalone {
+  margin-top: 16px;
+}
+.campaign-standalone h3 {
+  margin: 0 2px 6px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Instances as rows: who, scope, what it does now, elapsed time. */
+.agent-rows {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+}
+.agent-rows.is-boxed {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+.agent-rows > li + li {
+  border-top: 1px solid color-mix(in oklab, var(--border), transparent 35%);
+}
+button.agent-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 400;
+}
+button.agent-row.has-cost {
+  grid-template-columns: 8px minmax(0, 1fr) auto auto;
+}
+button.agent-row:hover:not(:disabled) {
+  background: var(--soft);
+}
+.agent-row-who {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.agent-row-who strong {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-row-who span {
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-row-doing {
+  display: grid;
+  justify-items: end;
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.agent-row-doing em {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+  color: var(--secondary);
+}
+.agent-row-cost {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The campaign panel. */
+.campaign-now {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--tint);
+  font-size: 13px;
+}
+.campaign-now.is-result {
+  border-color: color-mix(in oklab, var(--success), transparent 60%);
+  background: var(--success-soft);
+}
+.campaign-now-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.campaign-plan,
+.campaign-mandate {
+  font-size: 13px;
+}
+.campaign-mandate > h4 + * {
+  margin-bottom: 12px;
+}
+.campaign-spent {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.campaign-jobs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+}
+.campaign-jobs li {
+  display: grid;
+  gap: 4px;
+}
+.campaign-jobs li > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.campaign-jobs code {
+  font-size: 11px;
+  color: var(--secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.campaign-controls .meta {
+  margin: 0;
+}
+.campaign-limits {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.campaign-job-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+}
+.campaign-job-choice input {
+  width: auto;
+}
+.campaign-ending {
+  padding: 12px 14px;
+  border: 1px solid color-mix(in oklab, var(--danger), transparent 70%);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  font-size: 13px;
+}
+.campaign-message {
+  display: grid;
+  gap: 8px;
+}
+.campaign-message textarea {
+  min-height: 64px;
+}
+.campaign-message-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.campaign-transcript {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.turn-system {
+  font-size: 12px;
+}
+.turn-system > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.turn-system > summary strong {
+  font-weight: 500;
+}
+.turn-system > summary + * {
+  margin-top: 8px;
+}
+.turn {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+}
+.turn header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.turn header strong {
+  font-weight: 500;
+  color: var(--secondary);
+}
+
+/* The instance panel. */
+.agent-task {
+  margin: 0;
+  font-size: 13px;
+  color: var(--secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.agent-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.agent-log > li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.agent-log > li:first-child {
+  border-top: 0;
+}
+.agent-log > li.is-live {
+  background: var(--tint);
+}
+.agent-log time {
+  padding-top: 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.agent-log .tool-call {
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+.agent-log .tool-call summary {
+  padding: 6px 0;
+}
+.agent-log .thinking {
+  margin: 4px 0;
+}
+.agent-log-text {
+  padding: 6px 0;
+  color: var(--secondary);
+}
+.live-cursor::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  margin-left: 4px;
+  vertical-align: -2px;
+  background: var(--accent);
+  animation: blink 1s steps(2) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+@media (max-width: 600px) {
+  .campaign-limits {
+    grid-template-columns: 1fr;
+  }
+}

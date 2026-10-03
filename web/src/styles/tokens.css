@@ -1,0 +1,79 @@
+@font-face {
+  font-family: "DM Sans";
+  src: url("/fonts/dm-sans.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: Manrope;
+  src: url("/fonts/manrope.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+:root {
+  color-scheme: dark;
+  --bg: light-dark(#f4f5f8, #14161c);
+  --surface: light-dark(#fff, #1a1d25);
+  --sidebar: light-dark(#eceef3, #101218);
+  --soft: light-dark(#e8eaf1, #252936);
+  --tint: light-dark(#f0f1f6, #1d2029);
+  --border: light-dark(#d7dae3, #303541);
+  --border-strong: light-dark(#bcc2cf, #464d5e);
+  --ink: light-dark(#242632, #e8e9f0);
+  --secondary: light-dark(#494f60, #c4c8d4);
+  --muted: light-dark(#626879, #a6abb9);
+  --accent: light-dark(#745497, #b29ae9);
+  --accent-hover: light-dark(#61457f, #c5b1f2);
+  --on-accent: light-dark(#fff, #181222);
+  --accent-ink: light-dark(#68508f, #bba8ee);
+  --accent-soft: light-dark(#eae4f3, #2b253b);
+  --info: light-dark(#3c629b, #9bb5e4);
+  --info-soft: light-dark(#e7edf7, #202938);
+  --success: light-dark(#3d7058, #a0c8b3);
+  --success-soft: light-dark(#e5efe8, #202f29);
+  --warning: light-dark(#815e27, #dfc18d);
+  --warning-soft: light-dark(#f3eadb, #342b20);
+  --danger: light-dark(#a13e49, #e8a4a9);
+  --danger-soft: light-dark(#f7e9eb, #352329);
+  /* Activity states: separate from the accent, which only marks "busy". */
+  --st-busy: var(--accent);
+  --st-waiting: var(--info);
+  --st-pending: var(--warning);
+  --st-paused: var(--muted);
+  --st-error: var(--danger);
+  --st-done: var(--success);
+  --scrim: light-dark(#14131e73, #06060a99);
+  --font-sans:
+    "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-heading: Manrope, var(--font-sans);
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 32px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --shadow-color: light-dark(#20133612, #00000040);
+  --shadow-sm: 0 1px 2px var(--shadow-color);
+  --shadow-md: 0 6px 20px var(--shadow-color);
+  --measure: 72ch;
+  --ease: 140ms ease;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  font-synthesis: style;
+  -webkit-font-smoothing: antialiased;
+  color: var(--ink);
+  background: var(--bg);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}

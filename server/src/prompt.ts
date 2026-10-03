@@ -1,0 +1,19 @@
+export const workspaceGitignore = `# Pico state and large artifacts stay out of git
+.pico/
+data/
+**/runs/
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.npy
+*.npz
+*.h5
+*.parquet
+`;

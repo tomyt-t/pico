@@ -11,10 +11,7 @@
     "skipLibCheck": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "paths": {
-      "@/lab/*": ["./packages/lab/src/*"],
-      "@/runner/*": ["./packages/runner/src/*"],
-      "@/server/*": ["./apps/server/src/*"],
-      "@/web/*": ["./apps/web/src/*"]
+      "@/web/*": ["./web/src/*"]
     }
   }
 }

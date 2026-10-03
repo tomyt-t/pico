@@ -1,0 +1,325 @@
+.composed-pages {
+  min-width: 0;
+}
+
+.panorama-intro {
+  padding-bottom: 0;
+}
+
+.page-query-state:empty {
+  display: none;
+}
+
+.page-query-state:has(+ .page) {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.panorama-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 28px;
+  text-align: center;
+}
+
+.panorama-empty .empty {
+  max-width: 560px;
+  margin: 0;
+}
+
+/* --- Panorama composed from the records --- */
+.auto-panorama .notice .text-button {
+  margin-left: 4px;
+  font-size: inherit;
+}
+
+.auto-panorama .grid-two {
+  align-items: start;
+}
+
+.auto-panorama .section-heading a {
+  flex: none;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.panorama-direction {
+  border-left: 3px solid var(--accent);
+}
+
+.panorama-lead {
+  color: var(--secondary);
+  font-size: 16px;
+  max-width: var(--measure);
+  margin-bottom: 18px;
+}
+
+.panorama-lead:last-child {
+  margin-bottom: 0;
+}
+
+.panorama-direction .markdown {
+  font-size: 15px;
+}
+
+.panorama-fronts {
+  display: grid;
+  gap: 12px;
+}
+
+.panorama-front {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--tint);
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.panorama-front h3 {
+  font-size: var(--text-base);
+  overflow-wrap: anywhere;
+}
+
+.auto-panorama .panorama-front h3 a {
+  color: var(--ink);
+}
+
+.panorama-front > .meta {
+  margin: 0 0 6px;
+}
+
+.panorama-front .record-row {
+  flex-wrap: wrap;
+}
+
+.auto-panorama .stats {
+  margin-bottom: 0;
+}
+
+.auto-panorama .stat {
+  background: var(--tint);
+  box-shadow: none;
+}
+
+.sidebar-pages {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+/* A long page title shortens with an ellipsis instead of widening the sidebar. */
+.sidebar-pages .sidebar-page {
+  width: 100%;
+  min-width: 0;
+}
+.sidebar-page-title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.sidebar-pages-heading {
+  padding: 0 10px;
+}
+
+.sidebar-page-title,
+.breadcrumb-page {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumb-page {
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+/* --- Panorama: table of contents, the page, and the rail --- */
+.panorama-layout {
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr) 280px;
+  gap: 0 4px;
+  align-items: start;
+}
+.panorama-main {
+  min-width: 0;
+}
+.panorama-main .page-reading {
+  max-width: none;
+  margin: 0;
+}
+.panorama-toc {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  padding: 52px 0 0 24px;
+  font-size: var(--text-sm);
+}
+.panorama-toc .eyebrow {
+  padding-left: 10px;
+  margin-bottom: 6px;
+}
+.panorama-toc button {
+  text-align: left;
+  padding: 5px 10px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.panorama-toc button:hover:not(:disabled) {
+  background: none;
+  color: var(--ink);
+}
+.panorama-toc button[aria-current="true"] {
+  border-left-color: var(--accent);
+  color: var(--ink);
+}
+.panorama-rail {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  max-height: 100vh;
+  overflow: auto;
+  padding: 52px 24px 40px 0;
+  scrollbar-width: thin;
+}
+.rail-card {
+  min-width: 0;
+  padding: 14px 0 16px;
+  border-top: 1px solid var(--border);
+}
+.rail-card:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.rail-card h3 {
+  margin: 0 0 10px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.rail-card h3.warn {
+  color: var(--warning);
+}
+.rail-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.rail-counts a {
+  display: grid;
+  color: var(--ink);
+}
+.rail-counts a:hover {
+  text-decoration: none;
+}
+.rail-counts a:hover small {
+  color: var(--ink);
+}
+.rail-counts b {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.rail-counts small {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+.rail-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: var(--text-sm);
+}
+.rail-card li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.rail-card li .dot {
+  flex: none;
+  margin-top: 7px;
+  animation: none;
+}
+.rail-card li a {
+  color: var(--ink);
+}
+.rail-card li small {
+  margin-right: 4px;
+}
+.rail-card p {
+  margin: 0 0 8px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--secondary);
+  overflow-wrap: anywhere;
+}
+.rail-card p.big {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--ink);
+}
+.rail-card p.big a {
+  color: var(--ink);
+}
+.rail-card p:last-child {
+  margin-bottom: 0;
+}
+.rail-card > .text-button {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+}
+@media (max-width: 1280px) {
+  .panorama-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panorama-toc {
+    display: none;
+  }
+  .panorama-rail {
+    position: static;
+    max-height: none;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    padding: 0 40px 40px;
+  }
+}
+.has-chat-dock .panorama-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+.has-chat-dock .panorama-toc {
+  display: none;
+}
+.has-chat-dock .panorama-rail {
+  position: static;
+  max-height: none;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  padding: 0 40px 40px;
+}
+@media (max-width: 760px) {
+  .panorama-rail,
+  .has-chat-dock .panorama-rail {
+    padding: 0 20px 32px;
+  }
+}

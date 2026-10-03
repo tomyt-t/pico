@@ -1,64 +1,41 @@
-# Desenvolvimento de Pico
+# Desenvolvimento do Pico
 
-## Direção do produto
+Leia README.md antes de mudanças estruturais. O produto se chama Pico; a pasta
+tiny-pico distingue o repositório.
 
-Leia README.md e docs/architecture.md antes de mudanças estruturais.
-As entregas e sua validação estão em docs/development.md.
-A estrutura implementada, as fronteiras e o mapa de trabalho para agentes
-estão em docs/code-architecture.md: apps/server e apps/web são aplicações;
-packages/lab contém o motor e packages/runner a execução independente.
-Contratos públicos são o subpath @pico/lab/contracts, sem workspace separado.
-As rodadas adversariais estão em docs/architecture-review.md.
+## Direção
 
-Pico é o co-líder do pesquisador. A baseline usa uma sessão principal por
-laboratório e tools. A pesquisa fica organizada em entidades persistentes,
-mantidas naturalmente durante a conversa.
+Pico é um co-líder de pesquisa com o mínimo de lógica própria. O Pi SDK cuida
+de sessão, contexto, compactação, retries e tools de arquivo e shell. Pico
+acrescenta uma pasta por laboratório, registros estruturados em SQLite, jobs em
+segundo plano com notificação, commits automáticos, fontes e datasets, e a UI.
 
-- Manter Pico como nome do produto; tiny-pico distingue a pasta/repositório.
-- A refatoração integral foi realizada conforme decisão do pesquisador.
-  Nas próximas evoluções, trabalhar em entregas pequenas que demonstrem
-  uma capacidade real.
-- Introduzir abstrações quando houver uma necessidade concreta.
-- Campanhas, equipes e papéis de agentes não são requisitos da nova jornada.
-- Reaproveitar componentes da implementação anterior somente após revisar suas
-  dependências. A origem dos registros antigos deve ser preservada na importação.
+- O sistema registra, não julga. Nenhuma regra impede o modelo de gravar um
+  registro ou rodar um comando. Proveniência vem de graça: commit por job,
+  revisões por registro, hash de manifesto por dataset.
+- Simplicidade primeiro. Introduzir abstrações só com necessidade concreta.
+  Não recriar fila, sandbox, snapshot, idempotência ou validação científica.
+- Sem burocracia para o modelo: tools poucas, campos opcionais, texto livre.
+- Não há código legado a preservar. Migrações do SQLite ficam em
+  `server/src/db.ts`, aditivas.
 
-## Limites entre módulos
+## Limites
 
-- Tools chamam operações de lab; regras científicas ficam em lab.
-- Pico e UI consultam os mesmos registros e projeções.
-- Storage implementa persistência e migrações; web usa somente a API e contratos.
-- Runner executa jobs e devolve observações; o modelo escreve interpretações.
-- Dados e credenciais de modelo são tratados separadamente do código da aplicação.
-- Usar imports com alias @/ dentro de src, configurado de forma coerente para
-  TypeScript, runtime, bundler e testes. Usar prefixos únicos
-  @/lab, @/runner, @/server e @/web
-  dentro do respectivo workspace. Imports entre pacotes usam nomes e exports
-  públicos; aliases internos não podem contornar essa fronteira.
-- Testes privados ficam no workspace proprietário. Scripts e testes da raiz
-  usam APIs públicas. Preservar os bytes das fixtures históricas.
-- Conferir a matriz em tests/architecture/module-policy.ts ao mudar dependências;
-  não relaxar a regra apenas para acomodar um import indevido.
-
-## Integridade da pesquisa
-
-- Preservar IDs, relações, autoria e histórico nas migrações.
-- Não substituir uma execução antiga para registrar uma nova tentativa.
-- Cada run referencia entradas, código e configuração preservados.
-- Resultados quantitativos devem apontar para observações coletadas do run.
-- Hipóteses e previsões são opcionais em exploração; critérios de um teste de
-  hipótese precisam distinguir o que foi previsto do que foi observado.
-- Registrar conclusões com fontes e limitações; avaliação por Pico não representa
-  uma revisão independente.
-- Mutações repetidas por recuperação não podem criar runs ou registros duplicados.
+- `server/src/contracts.ts` é um módulo folha com os tipos compartilhados. A
+  web importa somente `@pico/server/contracts`.
+- Tools chamam funções de `records`, `jobs`, `papers` e `datasets`; a HTTP
+  chama as mesmas funções. UI e modelo veem os mesmos dados.
+- A pasta do laboratório pertence ao modelo e ao pesquisador. Pico só escreve
+  `.gitignore` e `.pico/` para logs e manifestos. Prompts, skills e exemplos
+  ficam no SQLite; o contexto do laboratório fica em `labs.context_markdown`.
+  Um `PICO.md` anterior é importado uma única vez, preservando o original.
+- Credenciais ficam no perfil Pi em `PICO_DATA_DIR/pi`, nunca no banco.
 
 ## Verificação
 
-Executar verificações proporcionais à mudança. Priorizar testes de invariantes,
-integração, migração/restore e cenários científicos completos.
+`bun run check` roda typecheck, Biome, testes e build. Testes usam um modelo
+falso OpenAI-compatível (`server/tests/support.ts`) e processos reais. Não
+chamar provedores externos em testes. Distinguir sempre o que foi testado com
+modelo falso do que foi validado com modelo real.
 
-Distinguir explicitamente: comportamento testado com modelo simulado, execução
-local real e investigação realizada com modelo externo. A configuração de acesso
-e orçamento para serviços externos pertence ao laboratório/pesquisador.
-
-Atualizar a documentação quando uma decisão de produto ou persistência mudar.
+Atualizar README.md quando uma decisão de produto ou de persistência mudar.

@@ -1,0 +1,114 @@
+.investigation-list {
+  display: grid;
+  gap: 18px;
+}
+.investigation-card {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.investigation-card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.investigation-card-heading > div {
+  min-width: 0;
+}
+.investigation-card-heading .eyebrow {
+  margin-bottom: 7px;
+}
+.investigation-card h2 {
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+.investigation-summary {
+  color: var(--secondary);
+  margin: 13px 0;
+  overflow-wrap: anywhere;
+}
+.investigation-meta {
+  display: flex;
+  gap: 8px 18px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  margin: 12px 0;
+}
+.investigation-preview {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.investigation-jobs {
+  margin-top: 20px;
+}
+.investigation-jobs a {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 6px 0;
+  font-size: var(--text-sm);
+}
+.investigation-jobs a > span:first-child {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.investigation-all-jobs {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: var(--text-xs);
+}
+@media (max-width: 600px) {
+  .investigation-jobs a {
+    flex-wrap: wrap;
+    gap: 4px 14px;
+  }
+  .investigation-jobs a > span:first-child {
+    flex-basis: 100%;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+}
+.investigation-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: var(--text-sm);
+}
+.investigation-materials,
+.investigation-unlinked {
+  margin-top: 30px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.investigation-group {
+  margin-top: 24px;
+}
+.investigation-group h3 {
+  margin-bottom: 10px;
+  font-size: var(--text-sm);
+}
+.investigation-materials .record-row,
+.investigation-preview .record-row,
+.investigation-unlinked .record-row {
+  flex-wrap: wrap;
+}
+.investigation-card h2 a {
+  color: var(--ink);
+}
+@media (max-width: 760px) {
+  .investigation-card {
+    padding: 18px;
+  }
+  .investigation-card-heading {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}

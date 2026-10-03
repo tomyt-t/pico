@@ -1,0 +1,342 @@
+@media (prefers-reduced-motion: reduce) {
+  .dot.busy,
+  .loading-dot,
+  .sheet[open],
+  .live-cursor::after {
+    animation: none;
+  }
+}
+@media (min-width: 1500px) {
+  .chat-content,
+  .composer-wrap {
+    max-width: 920px;
+  }
+}
+@media (max-width: 1080px) {
+  .shell {
+    grid-template-columns: 202px minmax(0, 1fr);
+  }
+  .page {
+    padding: 28px 25px 50px;
+  }
+  .grid-main {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .chat-content {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+  .composer-wrap {
+    padding-left: 28px;
+    padding-right: 28px;
+  }
+  .topbar {
+    padding: 0 22px;
+  }
+  .stats {
+    gap: 8px;
+  }
+  .stat {
+    padding: 14px;
+  }
+  .stat strong {
+    font-size: 24px;
+  }
+}
+@media (max-width: 760px) {
+  .shell {
+    grid-template-columns: 1fr;
+    height: 100dvh;
+  }
+  .desktop-sidebar {
+    display: none;
+  }
+  button.mobile-menu {
+    display: inline-flex;
+    flex: none;
+  }
+  .topbar {
+    padding: 0 12px;
+    min-height: 56px;
+    gap: 8px;
+  }
+  .breadcrumbs {
+    flex: 1;
+    gap: 7px;
+  }
+  .model-chip,
+  .refresh-button,
+  .shell-chat-toggle span {
+    display: none;
+  }
+  .shell-chat-toggle {
+    width: 34px;
+    height: 34px;
+    padding: 7px;
+  }
+  .lab-picker-heading {
+    padding: 16px;
+  }
+  .lab-picker-body {
+    padding: 18px 16px;
+  }
+  .lab-picker-footer {
+    gap: 8px;
+  }
+  .lab-picker-footer button {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .lab-current-label {
+    display: none;
+  }
+  .page {
+    padding: 24px 18px 36px;
+  }
+  .page-heading {
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+  h1 {
+    font-size: 24px;
+  }
+  .panel {
+    padding: 18px;
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grid-two {
+    grid-template-columns: 1fr;
+  }
+  .chat-content {
+    padding: 24px 20px 20px;
+  }
+  .composer-wrap {
+    padding: 8px 14px 13px;
+  }
+  .composer-hint {
+    display: none;
+  }
+  .chat-intro {
+    padding-top: 6vh;
+  }
+  .chat-intro h1 {
+    font-size: 28px;
+  }
+  .notice.demo {
+    padding: 9px 16px;
+    font-size: 11px;
+  }
+  .toolbar {
+    gap: 8px;
+  }
+  .toolbar input[type="search"] {
+    width: 100%;
+    flex-basis: 100%;
+  }
+  .toolbar select {
+    max-width: 100%;
+    width: 100%;
+  }
+  .toolbar label {
+    flex: 1;
+  }
+  .code-browser {
+    grid-template-columns: 1fr;
+  }
+  .file-list {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    max-height: 150px;
+  }
+  .file-list button {
+    width: auto;
+    display: inline-flex;
+    margin: 2px;
+  }
+  .compare-grid {
+    grid-template-columns: 1fr;
+  }
+  .comparison {
+    flex-wrap: wrap;
+  }
+  .details-grid,
+  .run-card > .details-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .experiment-table thead {
+    display: none;
+  }
+  .experiment-table,
+  .experiment-table tbody {
+    display: block;
+  }
+  .experiment-table tr {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 6px 10px;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .experiment-table tr:last-child {
+    border-bottom: 0;
+  }
+  .experiment-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+  }
+  .experiment-table td:nth-child(1) {
+    grid-row: span 4;
+  }
+  .experiment-table td:nth-child(4) > div {
+    display: inline;
+    margin-left: 8px;
+  }
+  .message-assistant .message-body,
+  .session-indicator.working {
+    padding-left: 0;
+    margin-left: 0;
+  }
+  .tool-call {
+    margin-left: 0;
+  }
+  .jump-latest {
+    bottom: 150px;
+  }
+  .turn-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .modal {
+    padding: 20px;
+  }
+  .setup-card {
+    padding: 26px;
+  }
+  .composer textarea {
+    min-height: 74px;
+  }
+  .section-heading {
+    align-items: flex-start;
+  }
+}
+@media (max-width: 420px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+  .topbar-actions {
+    gap: 4px;
+  }
+  .breadcrumb-divider,
+  .breadcrumb-page {
+    display: none;
+  }
+  .run-card {
+    padding: 16px;
+  }
+  .tabs {
+    gap: 16px;
+  }
+  .data-table th,
+  .data-table td {
+    padding: 10px 9px;
+  }
+}
+@media (max-width: 600px) {
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 761px) {
+  /* The expanded sidebar already names the laboratory. */
+  .shell:not(.sidebar-collapsed) .topbar-lab-switcher,
+  .shell:not(.sidebar-collapsed) .breadcrumb-divider {
+    display: none;
+  }
+  .shell.sidebar-collapsed {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+  .sidebar-collapsed .desktop-sidebar {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .sidebar-collapsed .sidebar-heading {
+    justify-content: center;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .sidebar-collapsed .sidebar-heading .eyebrow,
+  .sidebar-collapsed .sidebar-pages-heading,
+  .sidebar-collapsed .lab-identity-copy,
+  .sidebar-collapsed .lab-identity > svg,
+  .sidebar-collapsed .nav-label,
+  .sidebar-collapsed .sidebar-session > div,
+  .sidebar-collapsed .sidebar-session > .dot {
+    display: none;
+  }
+  .sidebar-collapsed .lab-identity {
+    padding: 5px;
+    justify-content: center;
+  }
+  .sidebar-collapsed .nav-item {
+    justify-content: center;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .sidebar-collapsed .sidebar-session {
+    padding: 10px 0;
+    justify-content: center;
+  }
+  .sidebar-collapsed .sidebar-search {
+    justify-content: center;
+    padding: 0;
+  }
+  .sidebar-collapsed .sidebar-search kbd {
+    display: none;
+  }
+  .sidebar-collapsed .sidebar-tools {
+    flex-direction: column;
+  }
+  .topbar-theme {
+    display: none;
+  }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .model-chip {
+    display: none;
+  }
+}
+@media (min-width: 1101px) {
+  /* Below this width the dock takes the whole workspace (chat.css). */
+  .lab-workspace .chat-pane.is-dock {
+    position: relative;
+    flex-basis: var(--dock-width, 400px);
+  }
+  .dock-resizer {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 1;
+  }
+  .dock-resizer:hover,
+  .dock-resizer:focus-visible {
+    background: var(--accent-soft);
+  }
+  .dock-resizer:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+}
