@@ -6,6 +6,7 @@ import type {
   PromptTemplate,
 } from "./contracts";
 import { now } from "./db";
+import { upgradePrompts } from "./default-upgrades";
 import { badRequest, notFound } from "./errors";
 import { defaultPrompts } from "./prompt-defaults";
 import { defaultSkills } from "./skill-defaults";
@@ -49,6 +50,7 @@ export class AgentResources {
             now(),
           ],
         );
+      upgradePrompts(db, defaultPrompts, defaultSkills);
     })();
   }
 

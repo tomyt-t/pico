@@ -203,6 +203,19 @@ const migrations: string[] = [
   CREATE INDEX jobs_campaign ON jobs(campaign_id, status);
   `,
   "ALTER TABLE agent_runs ADD COLUMN label TEXT;",
+  // Claude Agent SDK: conversations are Claude Code session ids. Pi session
+  // files stay unread. Defaults change for new choices, never for campaigns.
+  `
+  ALTER TABLE labs ADD COLUMN claude_session_id TEXT;
+  ALTER TABLE agent_runs ADD COLUMN session_id TEXT;
+  ALTER TABLE campaigns ADD COLUMN session_id TEXT;
+  ALTER TABLE campaigns ADD COLUMN session_cost REAL NOT NULL DEFAULT 0;
+  ALTER TABLE campaigns ADD COLUMN session_tokens INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE campaigns ADD COLUMN limit_resets_at TEXT;
+  UPDATE labs SET provider=NULL, model=NULL WHERE provider IS NOT 'anthropic';
+  UPDATE agent_definitions SET provider=NULL, model=NULL WHERE provider IS NOT 'anthropic';
+  UPDATE campaign_settings SET max_agents=2, lab_max_agents=3 WHERE id=1 AND max_agents=3 AND lab_max_agents=6;
+  `,
 ];
 
 export function openDatabase(path: string): Database {
@@ -221,7 +234,7 @@ export function openDatabase(path: string): Database {
   ) {
     db.close();
     throw new Error(
-      `${path} was created by a previous version of Pico and cannot be reused. Move or delete pico.sqlite* (the Pi profile in pi/ can stay), or point PICO_DATA_DIR elsewhere.`,
+      `${path} was created by a previous version of Pico and cannot be reused. Move or delete pico.sqlite* (the Claude profile in claude/ can stay), or point PICO_DATA_DIR elsewhere.`,
     );
   }
   db.exec(

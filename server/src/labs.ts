@@ -177,6 +177,21 @@ export class Labs {
     return lab;
   }
 
+  /** The laboratory conversation, resumed after a restart. */
+  sessionId(id: string): string | null {
+    const row = this.db
+      .query("SELECT claude_session_id FROM labs WHERE id = ?")
+      .get(id) as { claude_session_id: string | null } | null;
+    return row?.claude_session_id ?? null;
+  }
+
+  setSessionId(id: string, sessionId: string): void {
+    this.db.run("UPDATE labs SET claude_session_id = ? WHERE id = ?", [
+      sessionId,
+      id,
+    ]);
+  }
+
   update(id: string, patch: LabPatch): Lab {
     const current = this.get(id);
     const thinking = patch.thinking ?? current.thinking;

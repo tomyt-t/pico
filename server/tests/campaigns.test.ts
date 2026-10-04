@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApp } from "../src/app";
 import type { Campaign, CampaignDetail } from "../src/contracts";
@@ -7,10 +7,14 @@ import { processAlive } from "../src/jobs";
 import {
   call,
   type FakeModel,
+  hasToolResult,
+  pico,
   request,
+  requestText,
   type Sandbox,
   sandbox,
   startFakeModel,
+  systemText,
   until,
 } from "./support";
 
@@ -22,14 +26,13 @@ afterEach(async () => {
   box = undefined;
   fake = undefined;
 });
-const text = (req: FakeModel["requests"][number]) =>
-  JSON.stringify(req.messages);
+const text = (req: FakeModel["requests"][number]) => requestText(req);
 const worker = (req: FakeModel["requests"][number]) =>
-  text(req).includes("fresh, ephemeral session");
+  systemText(req).includes("fresh, ephemeral session");
 const coordinator = (req: FakeModel["requests"][number]) =>
-  text(req).includes("You are a persistent campaign coordinator");
+  systemText(req).includes("You are a persistent campaign coordinator");
 const progress = (args: Record<string, unknown>) => ({
-  toolCalls: [{ name: "campaign_progress", arguments: args }],
+  toolCalls: [{ name: pico("campaign_progress"), arguments: args }],
 });
 const input = (tag = "alpha") => ({
   title: tag,
@@ -37,20 +40,20 @@ const input = (tag = "alpha") => ({
   deliverable: `Evidence and limitations for ${tag}`,
 });
 
-test("an in-flight response that exhausts budget cannot start its tools or another model request", async () => {
+test("a response that exhausts the budget ends the campaign before another model request", async () => {
   fake = startFakeModel((req) =>
     coordinator(req)
       ? {
           toolCalls: [
             {
-              name: "run_job",
-              arguments: { command: "echo must-not-run", name: "Blocked job" },
+              name: pico("run_job"),
+              arguments: { command: "echo late", name: "Late job" },
             },
           ],
         }
       : { text: "Budget pending" },
   );
-  const { app, lab } = await setup(10_000);
+  const { app, lab } = await setup(true);
   app.campaigns.configure({ budgetUsd: 0.1 });
   const campaign = app.campaigns.start(lab, input());
   await app.campaigns.poll();
@@ -58,83 +61,128 @@ test("an in-flight response that exhausts budget cannot start its tools or anoth
     () => app.campaigns.get(lab.id, campaign.id).status === "pending",
   );
   await until(() => !app.campaigns.get(lab.id, campaign.id).isWorking);
-  expect(app.campaigns.get(lab.id, campaign.id)).toMatchObject({
-    reason: "budget",
-    usage: { total: 15 },
-  });
-  expect(app.campaigns.get(lab.id, campaign.id).usage.cost).toBeCloseTo(0.15);
-  expect(app.jobs.list(lab.id)).toEqual([]);
+  expect(app.campaigns.get(lab.id, campaign.id).reason).toBe("budget");
+  expect(app.campaigns.get(lab.id, campaign.id).usage.total).toBeGreaterThan(
+    75_000,
+  );
+  expect(app.campaigns.get(lab.id, campaign.id).usage.cost).toBeCloseTo(
+    perCall,
+    3,
+  );
+  // Claude Code learns a response's cost only after it; that response's
+  // tools may still run, but no further model request is made.
   await app.campaigns.poll();
   expect(fake.requests.filter(coordinator)).toHaveLength(1);
-}, 10_000);
+}, 20_000);
 
-test("native Pi compaction charges the campaign and a paused session cannot request more model work", async () => {
-  fake = startFakeModel(() => ({
-    text: "Evidence and limitations. ".repeat(80),
-  }));
-  const { app, lab } = await setup(10_000);
-  writeFileSync(
-    join(app.paths.agentDir, "settings.json"),
-    JSON.stringify({
-      compaction: { enabled: false, keepRecentTokens: 1, reserveTokens: 100 },
-    }),
-  );
+test("a paused campaign's session cannot request more model work", async () => {
+  fake = startFakeModel(() => ({ text: "Evidence and limitations." }));
+  const { app, lab } = await setup(true);
   const campaign = app.campaigns.start(lab, input());
   app.db.run("UPDATE campaigns SET wake_requested=0 WHERE id=?", [campaign.id]);
   const session = await app.sessions.createSession(lab, undefined, campaign);
   try {
-    await session.prompt("Inspect the first evidence", {
-      expandPromptTemplates: false,
-    });
-    await session.prompt("Inspect the second evidence", {
-      expandPromptTemplates: false,
-    });
-    expect(app.campaigns.get(lab.id, campaign.id).usage.cost).toBeCloseTo(0.3);
-    const beforeCompaction = fake.requests.length;
-    await session.compact("Preserve the objective and evidence");
-    const compactionRequests = fake.requests.length - beforeCompaction;
-    expect(compactionRequests).toBeGreaterThan(0);
+    await session.prompt("Inspect the first evidence");
+    await session.prompt("Inspect the second evidence");
     expect(app.campaigns.get(lab.id, campaign.id).usage.cost).toBeCloseTo(
-      0.3 + compactionRequests * 0.15,
+      2 * perCall,
+      3,
     );
     const calls = fake.requests.length;
     await app.campaigns.control(lab.id, campaign.id, { action: "pause" });
-    await session.prompt("No further paid work", {
-      expandPromptTemplates: false,
-    });
+    await session.prompt("No further model work");
     expect(fake.requests).toHaveLength(calls);
+    expect(session.lastResult).toMatchObject({ ok: false });
     expect(app.campaigns.get(lab.id, campaign.id).status).toBe("paused");
   } finally {
     await session.abort();
-    session.dispose();
+    await session.dispose();
   }
-}, 10_000);
+}, 20_000);
 
-async function setup(cost = 0) {
+test("a Claude plan limit leaves the campaign pending with its reset time until the researcher resumes it", async () => {
+  let release!: () => void;
+  let started = false;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  fake = startFakeModel(async (req) => {
+    if (!coordinator(req)) return { text: "Pico noted the plan limit." };
+    if (text(req).includes("PLAN-RESET"))
+      return progress({ action: "complete", result: "Finished after reset" });
+    started = true;
+    await gate;
+    return { text: "Work cut short by the plan limit" };
+  });
+  const { app, lab } = await setup();
+  const campaign = app.campaigns.start(lab, input());
+  app.db.run("UPDATE campaigns SET wake_requested=0 WHERE id=?", [campaign.id]);
+  const session = await app.sessions.createSession(lab, undefined, campaign);
+  try {
+    const done = session.prompt("Inspect the evidence");
+    await until(() => started);
+    // Claude Code reports plan limits only to subscription logins, which
+    // tests never use: deliver the event as the CLI would.
+    const resetsAt = Math.floor(Date.now() / 1000) + 3600;
+    await (
+      session as unknown as { handle(message: unknown): Promise<void> }
+    ).handle({
+      type: "rate_limit_event",
+      rate_limit_info: { status: "rejected", resetsAt },
+      uuid: crypto.randomUUID(),
+      session_id: session.sessionId,
+    });
+    await done;
+    release();
+    const reset = new Date(resetsAt * 1000).toISOString();
+    expect(app.campaigns.get(lab.id, campaign.id)).toMatchObject({
+      status: "pending",
+      reason: "rate_limit",
+      limitResetsAt: reset,
+    });
+    expect(app.campaigns.get(lab.id, campaign.id).summary).toContain(reset);
+    expect(session.lastResult).toMatchObject({ ok: false });
+    const count = fake.requests.filter(coordinator).length;
+    await app.campaigns.poll();
+    expect(fake.requests.filter(coordinator)).toHaveLength(count);
+    await until(async () =>
+      JSON.stringify(await app.sessions.messages(lab.id)).includes(
+        "rate_limit",
+      ),
+    );
+  } finally {
+    await session.dispose();
+  }
+  await app.campaigns.control(lab.id, campaign.id, {
+    action: "resume",
+    message: "PLAN-RESET: the plan limit has reset",
+  });
+  expect(app.campaigns.get(lab.id, campaign.id).limitResetsAt).toBeNull();
+  await app.campaigns.poll();
+  await until(
+    () => app.campaigns.get(lab.id, campaign.id).status === "completed",
+  );
+}, 20_000);
+
+/** Fake usage priced by Claude Code for Sonnet ($2/$10 per Mtok): about
+ *  US$ 0.15 per agent request. */
+const perCall = 0.15;
+
+async function setup(expensive = false) {
   if (!fake) throw new Error("Fake model required");
+  if (expensive) fake.usage.input_tokens = 75_000;
   box = sandbox({ fakeModelUrl: fake.url });
   const app = box.app;
-  if (cost) {
-    const path = join(app.paths.agentDir, "models.json");
-    const config = JSON.parse(readFileSync(path, "utf8"));
-    config.providers.fake.models[0].cost = {
-      input: cost,
-      output: cost,
-      cacheRead: 0,
-      cacheWrite: 0,
-    };
-    writeFileSync(path, JSON.stringify(config));
-  }
   for (const id of ["campaign-coordinator", "bibliography", "experimentation"])
     await app.catalog.configure(id, {
-      provider: "fake",
-      model: "fake-1",
+      provider: "anthropic",
+      model: "sonnet",
       thinking: "off",
     });
   const lab = await app.labs.create({
     name: "Campaign lab",
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
   return { app, lab };
@@ -144,22 +192,22 @@ test("campaign defaults are copied, HTTP validates limits and reads stay passive
   fake = startFakeModel();
   const { app, lab } = await setup();
   const settings = app.campaigns.settings();
-  expect(settings).toEqual({ budgetUsd: 5, maxAgents: 3, labMaxAgents: 6 });
+  expect(settings).toEqual({ budgetUsd: 5, maxAgents: 2, labMaxAgents: 3 });
   const campaign = await call<Campaign>(app, `/labs/${lab.id}/campaigns`, {
     body: input(),
   });
   await app.campaigns.control(lab.id, campaign.id, { action: "pause" });
   await call(app, "/campaign-settings", {
     method: "PATCH",
-    body: { budgetUsd: 8, maxAgents: 2, labMaxAgents: 4 },
+    body: { budgetUsd: 8, maxAgents: 1, labMaxAgents: 4 },
   });
   expect(app.campaigns.get(lab.id, campaign.id)).toMatchObject({
     budgetUsd: 5,
-    maxAgents: 3,
+    maxAgents: 2,
     status: "paused",
   });
   const next = app.campaigns.start(lab, input("beta"));
-  expect(next).toMatchObject({ budgetUsd: 8, maxAgents: 2 });
+  expect(next).toMatchObject({ budgetUsd: 8, maxAgents: 1 });
   await app.campaigns.control(lab.id, next.id, { action: "pause" });
   for (const body of [
     { budgetUsd: 0 },
@@ -184,6 +232,7 @@ test("campaign defaults are copied, HTTP validates limits and reads stay passive
     `/labs/${lab.id}/campaigns/${campaign.id}`,
   );
   expect(detail.messages).toEqual([]);
+  expect(detail.campaign.sessionId).toBeNull();
   expect(fake.requests).toHaveLength(0);
 });
 
@@ -201,14 +250,14 @@ test("parallel campaigns have separate persistent coordinators and deliver speci
     return {
       toolCalls: [
         {
-          name: "run_subagent",
+          name: pico("run_subagent"),
           arguments: {
             agent_id: "bibliography",
             task: `Research scope-${tag}`,
           },
         },
         {
-          name: "campaign_progress",
+          name: pico("campaign_progress"),
           arguments: {
             action: "wait",
             plan: `Compare sources for ${tag}`,
@@ -226,8 +275,9 @@ test("parallel campaigns have separate persistent coordinators and deliver speci
     () => app.campaigns.list(lab.id).every((c) => c.status === "completed"),
     15_000,
   );
+  const sessions = new Set<string | null>();
   for (const campaign of [a, b]) {
-    const detail = app.campaigns.detail(lab.id, campaign.id);
+    const detail = await app.campaigns.detail(lab.id, campaign.id);
     const tag = campaign.title;
     expect(detail.agents).toHaveLength(1);
     expect(detail.agents[0]).toMatchObject({
@@ -238,9 +288,11 @@ test("parallel campaigns have separate persistent coordinators and deliver speci
     expect(JSON.stringify(detail.messages)).not.toContain(
       `PRIVATE-REPORT-${tag === "alpha" ? "beta" : "alpha"}`,
     );
-    expect(detail.campaign.sessionFile).toContain(`/campaigns/${campaign.id}/`);
+    expect(detail.campaign.sessionId).toBeTruthy();
+    sessions.add(detail.campaign.sessionId);
     expect(detail.campaign.result).toBe(`Final evidence for ${tag}`);
   }
+  expect(sessions.size).toBe(2);
   expect(app.subagents.list(lab.id, true)).toEqual([]);
   expect(app.campaigns.list(lab.id, true)).toEqual([]);
   await until(async () =>
@@ -263,14 +315,14 @@ test("campaign budget includes workers, blocks further requests and resumes the 
     return {
       toolCalls: [
         {
-          name: "run_subagent",
+          name: pico("run_subagent"),
           arguments: { agent_id: "bibliography", task: "Research paid scope" },
         },
-        { name: "campaign_progress", arguments: { action: "wait" } },
+        { name: pico("campaign_progress"), arguments: { action: "wait" } },
       ],
     };
   });
-  const { app, lab } = await setup(10_000); // 15 fake tokens = $0.15 per call.
+  const { app, lab } = await setup(true);
   app.campaigns.configure({ budgetUsd: 0.2 });
   const campaign = app.campaigns.start(lab, input());
   await app.campaigns.poll();
@@ -280,7 +332,7 @@ test("campaign budget includes workers, blocks further requests and resumes the 
   await until(() => app.subagents.list(lab.id).every((run) => run.notified));
   const pending = app.campaigns.get(lab.id, campaign.id);
   expect(pending.reason).toBe("budget");
-  expect(pending.usage.cost).toBeCloseTo(0.3);
+  expect(pending.usage.cost).toBeCloseTo(2 * perCall, 3);
   const count = fake.requests.filter(
     (req) => coordinator(req) || worker(req),
   ).length;
@@ -299,10 +351,12 @@ test("campaign budget includes workers, blocks further requests and resumes the 
   await until(
     () => app.campaigns.get(lab.id, campaign.id).status === "completed",
   );
+  // Claude Code reports a turn's cost with its result, after the tools ran.
+  await until(() => !app.campaigns.get(lab.id, campaign.id).isWorking);
   const completed = app.campaigns.get(lab.id, campaign.id);
   expect(completed.budgetUsd).toBe(1.2);
-  expect(completed.sessionFile).toBe(pending.sessionFile);
-  expect(completed.usage.cost).toBeCloseTo(0.45);
+  expect(completed.sessionId).toBe(pending.sessionId);
+  expect(completed.usage.cost).toBeCloseTo(3 * perCall, 3);
 }, 20_000);
 
 test("Pico coordinates the shared editor and hands real reviewed pages back to the waiting campaign", async () => {
@@ -315,7 +369,7 @@ test("Pico coordinates the shared editor and hands real reviewed pages back to t
         return {
           toolCalls: [
             {
-              name: "save_page",
+              name: pico("save_page"),
               arguments: {
                 title: "Campaign synthesis",
                 body: "Evidence is inconclusive; the comparison needs additional measurements.",
@@ -330,7 +384,7 @@ test("Pico coordinates the shared editor and hands real reviewed pages back to t
         return {
           toolCalls: [
             {
-              name: "review_pages",
+              name: pico("review_pages"),
               arguments: {
                 pages: [
                   {
@@ -363,7 +417,7 @@ test("Pico coordinates the shared editor and hands real reviewed pages back to t
       return {
         toolCalls: [
           {
-            name: "message_campaign",
+            name: pico("message_campaign"),
             arguments: {
               id: campaignId,
               message: `EDITORIAL-READY ${app.records.list(lab.id, { kind: "page" })[0]?.id}. Page coverage inspected; no outstanding issues.`,
@@ -371,12 +425,11 @@ test("Pico coordinates the shared editor and hands real reviewed pages back to t
           },
         ],
       };
-    if (req.messages.some((message) => message.role === "tool"))
-      return { text: "The shared editor is working." };
+    if (hasToolResult(req)) return { text: "The shared editor is working." };
     return {
       toolCalls: [
         {
-          name: "run_subagent",
+          name: pico("run_subagent"),
           arguments: {
             agent_id: "research-editor",
             task: `Prepare the synthesis page for campaign ${campaignId}, and acknowledge its review.`,
@@ -387,8 +440,8 @@ test("Pico coordinates the shared editor and hands real reviewed pages back to t
   });
   const { app, lab } = await setup();
   await app.catalog.configure("research-editor", {
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
   const campaign = app.campaigns.start(lab, input());
@@ -469,9 +522,11 @@ test("capacity limits count parallel instances and wait without a user decision"
       await gate;
       return { text: "Capacity released" };
     }
-    return coordinator(req)
+    if (!coordinator(req)) return { text: "Recorded" };
+    // A coordinator that wakes before its specialist returns waits for it.
+    return text(req).includes("Capacity released")
       ? progress({ action: "complete", result: "Reconciled capacity results" })
-      : { text: "Recorded" };
+      : progress({ action: "wait" });
   });
   const { app, lab } = await setup();
   app.campaigns.configure({ maxAgents: 1, labMaxAgents: 2 });
@@ -545,11 +600,11 @@ test("paused and pending campaigns survive restart, and closing running jobs req
 test("a campaign resumes its persisted job outcome after restart without launching the experiment twice", async () => {
   fake = startFakeModel((req) => {
     if (worker(req)) {
-      if (!req.messages.some((message) => message.role === "tool"))
+      if (!hasToolResult(req))
         return {
           toolCalls: [
             {
-              name: "run_job",
+              name: pico("run_job"),
               arguments: {
                 name: "Persistent experiment",
                 command:
@@ -577,13 +632,13 @@ test("a campaign resumes its persisted job outcome after restart without launchi
     return {
       toolCalls: [
         {
-          name: "run_subagent",
+          name: pico("run_subagent"),
           arguments: {
             agent_id: "experimentation",
             task: "Run the persistent experiment",
           },
         },
-        { name: "campaign_progress", arguments: { action: "wait" } },
+        { name: pico("campaign_progress"), arguments: { action: "wait" } },
       ],
     };
   });
@@ -595,7 +650,8 @@ test("a campaign resumes its persisted job outcome after restart without launchi
       app.campaigns.get(lab.id, campaign.id).activity ===
       "Waiting for the existing experiment",
   );
-  const sessionFile = app.campaigns.get(lab.id, campaign.id).sessionFile;
+  const sessionId = app.campaigns.get(lab.id, campaign.id).sessionId;
+  expect(sessionId).toBeTruthy();
   const job = app.jobs.list(lab.id)[0];
   if (!job) throw new Error("The experiment did not create its job");
   expect(job?.campaignId).toBe(campaign.id);
@@ -609,8 +665,8 @@ test("a campaign resumes its persisted job outcome after restart without launchi
     await until(
       () => restarted.campaigns.get(lab.id, campaign.id).status === "completed",
     );
-    expect(restarted.campaigns.get(lab.id, campaign.id).sessionFile).toBe(
-      sessionFile,
+    expect(restarted.campaigns.get(lab.id, campaign.id).sessionId).toBe(
+      sessionId,
     );
     expect(restarted.subagents.list(lab.id)).toHaveLength(1);
     expect(restarted.jobs.list(lab.id)).toHaveLength(1);
@@ -618,12 +674,12 @@ test("a campaign resumes its persisted job outcome after restart without launchi
       status: "succeeded",
       notified: true,
     });
-    const receipts = restarted.campaigns
-      .detail(lab.id, campaign.id)
-      .messages.filter(
-        (message) =>
-          message.kind === "campaign-result" && message.text.includes(job.id),
-      );
+    const receipts = (
+      await restarted.campaigns.detail(lab.id, campaign.id)
+    ).messages.filter(
+      (message) =>
+        message.kind === "campaign-result" && message.text.includes(job.id),
+    );
     expect(receipts).toHaveLength(1);
   } finally {
     if (restarted.jobs.get(lab.id, job.id).status === "running")
@@ -651,7 +707,8 @@ test("active coordinators recover their plan after interruption, while kept jobs
   const campaign = app.campaigns.start(lab, input());
   await app.campaigns.poll();
   await until(() => working);
-  const sessionFile = app.campaigns.get(lab.id, campaign.id).sessionFile;
+  const sessionId = app.campaigns.get(lab.id, campaign.id).sessionId;
+  expect(sessionId).toBeTruthy();
   await app.close();
   const restarted = createApp(app.paths);
   try {
@@ -661,7 +718,7 @@ test("active coordinators recover their plan after interruption, while kept jobs
     );
     expect(restarted.campaigns.get(lab.id, campaign.id)).toMatchObject({
       plan: "Persisted plan",
-      sessionFile,
+      sessionId,
     });
     const kept = restarted.campaigns.start(lab, input("kept"));
     const job = await restarted.jobs.start(lab, {

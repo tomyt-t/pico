@@ -1,0 +1,4 @@
+# LF on every checkout, as Biome expects, also on Windows with core.autocrlf.
+* text=auto eol=lf
+# Third-party license kept byte for byte as distributed.
+web/public/fonts/dm-sans-OFL.txt -text

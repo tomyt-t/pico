@@ -1,10 +1,11 @@
 import type { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
-import {
-  type AgentSession,
-  SessionManager,
-} from "@earendil-works/pi-coding-agent";
 import type { AgentCatalog } from "./agent-catalog";
+import {
+  type ClaudeSession,
+  displayToolName,
+  readTranscript,
+  textOf,
+} from "./claude-runtime";
 import type {
   AgentDefinition,
   AgentRun,
@@ -33,7 +34,7 @@ interface Row {
   thinking: string;
   result: string;
   error: string | null;
-  session_file: string | null;
+  session_id: string | null;
   total_tokens: number;
   cost: number;
   notified: number;
@@ -43,7 +44,7 @@ interface Row {
 
 interface Active {
   done: Promise<void>;
-  session?: AgentSession;
+  session?: ClaudeSession;
   stop?: "stopped" | "interrupted";
   currentTool: string | null;
   streamingText: string;
@@ -57,12 +58,13 @@ interface Options {
     lab: Lab,
     run: AgentRun,
     definition: AgentDefinition,
-  ) => Promise<AgentSession>;
+  ) => Promise<ClaudeSession>;
   /** True only once the result is in the coordinator's session, not merely queued. */
   onFinished: (run: AgentRun) => Promise<boolean>;
 }
 
-/** Each spawn owns one ephemeral Pi session; completed runs remain in SQLite. */
+/** Each spawn owns one Claude Code session; completed runs remain in SQLite
+ *  and their conversation in Pico's Claude profile. */
 export class Subagents {
   private readonly active = new Map<string, Active>();
   private timer?: ReturnType<typeof setInterval>;
@@ -73,7 +75,7 @@ export class Subagents {
     private readonly db: Database,
     private readonly options: Options,
   ) {
-    // Pi turns run in this server, unlike detached shell jobs. Never silently resume them.
+    // Agent turns run in this server, unlike detached shell jobs. Never silently resume them.
     db.run(
       "UPDATE agent_runs SET status = 'interrupted', ended_at = ? WHERE status = 'running'",
       [now()],
@@ -96,7 +98,7 @@ export class Subagents {
       thinking: row.thinking,
       result: row.result,
       error: row.error,
-      sessionFile: row.session_file,
+      sessionId: row.session_id,
       createdAt: row.created_at,
       endedAt: row.ended_at,
       notified: row.notified === 1,
@@ -138,11 +140,11 @@ export class Subagents {
       throw badRequest("agentId is required");
     if (agentId === "campaign-coordinator")
       throw badRequest(
-        "Use start_campaign for the persistent campaign coordinator",
+        "Use mcp__pico__start_campaign for the persistent campaign coordinator",
       );
     if (campaignId && agentId === "research-editor")
       throw badRequest(
-        "Include an editorial request in campaign_progress summary; Pico coordinates the shared Research Editor",
+        "Include an editorial request in mcp__pico__campaign_progress summary; Pico coordinates the shared Research Editor",
       );
     if (agentId === "research-editor") {
       const current = this.list(lab.id).find(
@@ -204,57 +206,46 @@ export class Subagents {
         const session = await this.options.createSession(lab, run, definition);
         active.session = session;
         this.db.run(
-          "UPDATE agent_runs SET session_file = ?, provider = ?, model = ?, thinking = ? WHERE id = ?",
+          "UPDATE agent_runs SET provider = 'anthropic', model = ?, thinking = ? WHERE id = ?",
           [
-            session.sessionFile ?? null,
-            session.model?.provider ?? run.provider,
-            session.model?.id ?? run.model,
-            session.thinkingLevel,
+            session.model ?? run.model,
+            session.thinkingLevel ?? run.thinking,
             run.id,
           ],
         );
         session.subscribe((event) => {
           if (event.type === "agent_start" && active.stop) void session.abort();
           if (event.type === "tool_execution_start")
-            active.currentTool = event.toolName;
+            active.currentTool = displayToolName(event.toolName);
           if (event.type === "tool_execution_end") active.currentTool = null;
-          if (
-            event.type === "message_update" &&
-            event.assistantMessageEvent.type === "text_delta"
-          )
-            active.streamingText += event.assistantMessageEvent.delta;
-          if (event.type === "message_end") {
-            active.streamingText = "";
-            if (event.message.role === "assistant") {
-              const usage = event.message.usage;
-              this.db.run(
-                "UPDATE agent_runs SET total_tokens = total_tokens + ?, cost = cost + ? WHERE id = ?",
-                [usage.totalTokens, usage.cost.total, run.id],
-              );
-            }
-          }
+          if (event.type === "text_delta") active.streamingText += event.delta;
+          if (event.type === "message_end") active.streamingText = "";
+          if (event.type === "agent_end" && event.result)
+            this.db.run(
+              "UPDATE agent_runs SET total_tokens = total_tokens + ?, cost = cost + ? WHERE id = ?",
+              [event.result.tokens, event.result.cost, run.id],
+            );
+          if (session.sessionId)
+            this.db.run(
+              "UPDATE agent_runs SET session_id = ? WHERE id = ? AND session_id IS NULL",
+              [session.sessionId, run.id],
+            );
         });
-        if (!active.stop)
-          await session.prompt(run.task, { expandPromptTemplates: false });
-        const reply = [...session.messages]
-          .reverse()
-          .find((message) => message.role === "assistant");
-        if (reply?.role === "assistant") {
-          result = reply.content
-            .filter((part) => part.type === "text")
-            .map((part) => part.text)
-            .join("");
-          if (reply.stopReason === "error") {
+        if (!active.stop) await session.prompt(run.task);
+        const reply = session.lastResult;
+        if (reply) {
+          result = reply.ok ? reply.text : lastAssistantText(session);
+          if (!reply.ok) {
             status = "failed";
-            error = reply.errorMessage ?? "The model returned an error";
-          } else if (reply.stopReason === "aborted") status = "stopped";
+            error = reply.text || "The model returned an error";
+          }
         }
       }
     } catch (cause) {
       status = "failed";
       error = errorMessage(cause);
     } finally {
-      active.session?.dispose();
+      await active.session?.dispose().catch(() => {});
       active.currentTool = null;
       active.streamingText = "";
       await commitAll(lab.path, `Pico: ${run.name} (${run.id}) finished`).catch(
@@ -275,17 +266,17 @@ export class Subagents {
     }
   }
 
-  detail(
+  async detail(
     labId: string,
     id: string,
     options: { before?: number; limit?: number } = {},
-  ): AgentRunDetail {
+  ): Promise<AgentRunDetail> {
     const run = this.get(labId, id);
     const session = this.active.get(id)?.session;
     const messages =
       session?.messages ??
-      (run.sessionFile && existsSync(run.sessionFile)
-        ? SessionManager.open(run.sessionFile).buildSessionContext().messages
+      (run.sessionId
+        ? await readTranscript(run.sessionId).catch(() => [])
         : []);
     return { run, ...projectMessagePage(messages, options), usage: run.usage };
   }
@@ -347,6 +338,16 @@ export class Subagents {
   }
 }
 
+/** Partial work survives a failed turn; keep what the agent last said. */
+function lastAssistantText(session: ClaudeSession): string {
+  for (const entry of [...session.messages].reverse())
+    if (entry.type === "assistant") {
+      const text = textOf((entry.message as { content?: unknown }).content);
+      if (text) return text;
+    }
+  return "";
+}
+
 export function subagentNotification(run: AgentRun): string {
-  return `[Pico] Subagent "${run.name}" (${run.id}) finished: ${run.status}\nTask: ${run.task}\n${run.error ? `Error: ${run.error}\n` : ""}${run.result || "No final report. Consult list_subagents with this run id for the conversation."}`;
+  return `[Pico] Subagent "${run.name}" (${run.id}) finished: ${run.status}\nTask: ${run.task}\n${run.error ? `Error: ${run.error}\n` : ""}${run.result || "No final report. Consult mcp__pico__list_subagents with this run id for the conversation."}`;
 }

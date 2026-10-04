@@ -56,7 +56,7 @@ test("the catalog migration adds tables to an existing development database with
     );
     // Recreate the already-applied development schema before the catalog existed.
     db.exec(
-      "DROP INDEX jobs_campaign; ALTER TABLE jobs DROP COLUMN campaign_id; DROP TABLE campaign_settings; DROP TABLE lab_context_revisions; DROP TABLE prompt_templates; ALTER TABLE labs DROP COLUMN context_markdown; ALTER TABLE labs DROP COLUMN context_revision; ALTER TABLE labs DROP COLUMN context_updated_at; DROP TABLE page_reviews; DROP TABLE agent_runs; DROP TABLE campaigns; DROP TABLE agent_definitions; DROP TABLE agent_skills; DELETE FROM schema_migrations WHERE version >= 3",
+      "DROP INDEX jobs_campaign; ALTER TABLE jobs DROP COLUMN campaign_id; DROP TABLE campaign_settings; DROP TABLE lab_context_revisions; DROP TABLE prompt_templates; ALTER TABLE labs DROP COLUMN context_markdown; ALTER TABLE labs DROP COLUMN context_revision; ALTER TABLE labs DROP COLUMN context_updated_at; ALTER TABLE labs DROP COLUMN claude_session_id; DROP TABLE page_reviews; DROP TABLE agent_runs; DROP TABLE campaigns; DROP TABLE agent_definitions; DROP TABLE agent_skills; DELETE FROM schema_migrations WHERE version >= 3",
     );
     db.close();
     const upgraded = openDatabase(path);
@@ -85,6 +85,7 @@ test("the catalog migration adds tables to an existing development database with
         { version: 6 },
         { version: 7 },
         { version: 8 },
+        { version: 9 },
       ]);
     } finally {
       upgraded.close();

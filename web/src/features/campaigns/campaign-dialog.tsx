@@ -58,9 +58,7 @@ export function CampaignHeader({
       </span>
       <span>
         {t("campaigns.coordinator")}{" "}
-        <span className="mono">
-          {campaign.provider} / {campaign.model}
-        </span>
+        <span className="mono">{campaign.model}</span>
       </span>
       <span aria-hidden="true">·</span>
       <span>

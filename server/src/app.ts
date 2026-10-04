@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { AgentCatalog } from "./agent-catalog";
 import { AgentResources } from "./agent-resources";
 import { Campaigns } from "./campaigns";
+import { useClaudeConfigDir } from "./claude-auth";
 import {
   type PathOverrides,
   type PicoPaths,
@@ -40,6 +41,7 @@ export interface AppOptions extends PathOverrides {
 export function createApp(options: AppOptions = {}): App {
   const paths = picoPaths(options);
   preparePaths(paths);
+  useClaudeConfigDir(paths.claudeConfigDir);
   const db = openDatabase(paths.databasePath);
   const resources = new AgentResources(db);
   const labs = new Labs(db, paths, resources);

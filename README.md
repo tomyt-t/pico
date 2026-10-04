@@ -2,11 +2,19 @@
 
 Pico é o coordenador de um laboratório de pesquisa: conversa com o pesquisador,
 distribui tarefas a agentes especializados e integra os resultados. Cada
-laboratório tem uma pasta compartilhada, registros estruturados e uma sessão
-Pi persistente para o coordenador. Campanhas perseguem objetivos definidos com
-coordenadores próprios e sessões persistentes. Os especialistas trabalham em
-sessões Pi efêmeras, com liberdade para ler, escrever e executar código. A UI
-mostra a conversa, campanhas e agentes em atividade, registros, jobs e arquivos.
+laboratório tem uma pasta compartilhada, registros estruturados e uma conversa
+persistente do Claude Code para o coordenador. Campanhas perseguem objetivos
+definidos com coordenadores próprios e conversas persistentes. Os especialistas
+trabalham em conversas efêmeras, com liberdade para ler, escrever e executar
+código. A UI mostra a conversa, campanhas e agentes em atividade, registros,
+jobs e arquivos.
+
+Os agentes rodam no Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`), com a
+assinatura Claude (Pro ou Max) do próprio pesquisador, para uso pessoal.
+Pico nunca usa API paga: não existe modo com chave de API, e o servidor se
+recusa a iniciar se o login ativo não for o da assinatura. O
+[plano da migração](docs/pico-claude/README.md) registra as decisões e o que
+foi validado.
 
 A pasta deste projeto se chama **tiny-pico**; o produto se chama **Pico**.
 
@@ -16,16 +24,20 @@ funcionamento atual.
 
 ## Como funciona
 
-- Cada laboratório é uma pasta em `~/pico-labs/<nome>/` e uma sessão Pi
-  persistente. O modelo trabalha ali com `read`, `write`, `edit`, `bash`,
-  `grep`, `find` e `ls`, sem sandbox.
+- Cada laboratório é uma pasta em `~/pico-labs/<nome>/` e uma conversa
+  persistente do Claude Code. O modelo trabalha ali com `Read`, `Write`,
+  `Edit`, `Bash`, `Grep` e `Glob`, sem sandbox. A delegação nativa do Claude
+  Code (`Task`/`Agent`) fica desligada: os subagentes do Pico são persistidos e
+  aparecem na UI.
 - O contexto do laboratório guarda linha de pesquisa, direção atual e decisões
-  em `labs.context_markdown`. O Pi recebe esse Markdown a cada turno; a tool
-  `lab_context` e a interface consultam e atualizam a mesma coluna, com revisões
-  e autoria. Um `PICO.md` existente é importado uma única vez e preservado como
-  arquivo histórico. Laboratórios novos não criam esse arquivo.
-- Tools do Pico: `save_record` e `read_records` para registros estruturados
-  (pergunta, hipótese, experimento, resultado, conclusão, nota, paper,
+  em `labs.context_markdown`. O Claude Code recebe esse Markdown a cada
+  mensagem, pelo hook `UserPromptSubmit`; a tool `lab_context` e a interface
+  consultam e atualizam a mesma coluna, com revisões e autoria. Um `PICO.md`
+  existente é importado uma única vez e preservado como arquivo histórico.
+  Laboratórios novos não criam esse arquivo.
+- Tools do Pico, servidas por um servidor MCP no próprio processo (o modelo as
+  vê como `mcp__pico__<nome>`): `save_record` e `read_records` para registros
+  estruturados (pergunta, hipótese, experimento, resultado, conclusão, nota, paper,
   dataset, página), `save_page` para a edição de páginas, `read_skill` para
   procedimentos e exemplos, `lab_context` para direção e decisões, `run_job`, `list_jobs` e `stop_job` para execuções longas em
   segundo plano, `save_paper` para baixar e registrar fontes, e
@@ -35,14 +47,14 @@ funcionamento atual.
   mesma consulta em `GET /api/labs/:id/history`. Cada mudança reúne versões
   anterior e posterior, autoria, data e motivo quando registrado. Excluir um
   registro também exclui seu histórico, conforme a persistência existente.
-- A extensão `pi-web-access` dá `web_search`, `fetch_content` e
-  `get_search_content`.
+- A web é lida com `WebSearch` e `WebFetch`, as tools do próprio Claude Code.
 - Um job é um processo desanexado com log próprio. O workspace é commitado no
   git antes de cada job e ao fim de cada turno. Quando o job termina, uma
   mensagem com estado, métricas de `metrics.json` e o fim do log entra na
   conversa.
 - Registros, jobs, laboratórios, definições de agentes e suas execuções ficam
-  em um SQLite global. As conversas ficam nos arquivos de sessão do Pi.
+  em um SQLite global. As conversas ficam nos transcripts do Claude Code, no
+  perfil privado do Pico, e o SQLite guarda o `session_id` de cada uma.
 
 ## Agentes
 
@@ -79,13 +91,17 @@ informa o que mudou e encaminha questões científicas aos especialistas. O flux
 é orientado pelos prompts, com pendências persistidas; abrir páginas não inicia
 agentes e interromper um editor não dispara automaticamente outro.
 
-Em **Configurações → Agentes**, o pesquisador escolhe provedor/modelo e nível de
-raciocínio por perfil. A configuração vale para todos os laboratórios. Os
+Em **Configurações → Agentes**, o pesquisador escolhe o modelo Claude (Opus,
+Sonnet, Haiku…) e o nível de raciocínio por perfil. A lista vem do próprio
+Claude Code, lida uma vez por execução do servidor. Para poupar os limites da
+assinatura, a sugestão é Sonnet para os especialistas e Opus só para o Pico e o
+coordenador de campanha. A configuração vale para todos os laboratórios. Os
 perfis começam sem modelo selecionado: é preciso configurá-los antes de usar;
-não há substituição silenciosa por outro modelo. As credenciais continuam no
-perfil Pi, nunca no SQLite. Alterações valem para os próximos spawns; execuções
-em andamento conservam sua configuração, e o histórico registra modelo,
-nível de raciocínio efetivo, tokens e custo informado pelo provedor.
+não há substituição silenciosa por outro modelo. O login fica no perfil Claude
+Code do Pico, nunca no SQLite. Alterações valem para os próximos spawns;
+execuções em andamento conservam sua configuração, e o histórico registra
+modelo, nível de raciocínio efetivo, tokens e o consumo estimado pelo Claude
+Code.
 
 `list_agents` consulta o catálogo; `run_subagent` recebe `agent_id`, uma tarefa
 livre com contexto, caminhos e entrega esperada e um `label` opcional: um
@@ -102,11 +118,13 @@ paginada (`before` e `limit`, como no chat). `stop_subagent` interrompe uma
 instância. As tools e a HTTP usam as mesmas funções. Registros produzidos por
 um agente identificam sua execução em `author: subagent:<run-id>`.
 
-Cada spawn fica em `agent_runs`, com tarefa, estado, resultado ou erro e
-referência à sessão Pi. A conclusão é entregue ao Pico enquanto ele trabalha
-ou inicia um novo turno quando está livre. A instância continua visível como
-“Entregando resultado” até a mensagem entrar na sessão do coordenador; a
-entrega é tentada novamente se o coordenador estiver indisponível. O histórico
+Cada spawn fica em `agent_runs`, com tarefa, estado, resultado ou erro e o
+`session_id` da sua conversa. A conclusão é entregue ao Pico enquanto ele
+trabalha (entre duas rodadas de tools do turno em andamento) ou inicia um novo
+turno quando está livre. A instância continua visível como
+“Entregando resultado” até o Claude Code assumir a mensagem na conversa do
+coordenador; a entrega é tentada novamente se o coordenador estiver
+indisponível. O histórico
 permanece consultável após a entrega. O servidor marca execuções em andamento
 como interrompidas ao encerrar ou reiniciar, sem retomá-las automaticamente.
 Jobs de shell continuam independentes: sobrevivem ao servidor e à interrupção
@@ -122,9 +140,10 @@ no banco. Pico inicia campanhas com `start_campaign`, acompanha com
 Também é possível iniciar uma campanha pelo botão **Nova campanha** na sidebar.
 Configure o modelo de **Campaign Coordinator** em **Configurações → Agentes**.
 
-Cada campanha mantém uma sessão Pi própria em `sessions/campaigns/<id>/`.
-`campaign_progress` registra plano e avanços e escolhe continuar, aguardar
-resultados, pedir uma decisão ou concluir com a entrega. O caminho científico
+Cada campanha mantém uma conversa própria do Claude Code
+(`campaigns.session_id`), retomada depois de reinícios. `campaign_progress`
+registra plano e avanços e escolhe continuar, aguardar resultados, pedir uma
+decisão ou concluir com a entrega. O caminho científico
 fica a cargo do coordenador: respostas negativas e inconclusivas são válidas.
 Concluir exige uma entrega textual e reconciliação de agentes e jobs pendentes,
 sem validação científica do conteúdo. Um turno que acaba sem trabalho pendente
@@ -132,7 +151,7 @@ nem próximo passo explícito aguarda orientação, evitando um ciclo vazio.
 
 Várias campanhas e instâncias de um mesmo especialista podem trabalhar em paralelo.
 `agent_runs.campaign_id` e `jobs.campaign_id` registram o proprietário; resultados
-entram na sessão correspondente antes de serem considerados entregues. Pausas e
+entram na conversa correspondente antes de serem considerados entregues. Pausas e
 decisões pendentes continuam recebendo resultados, sem iniciar chamadas de modelo.
 O Pico recebe avanços significativos, bloqueios e entregas, não cada chamada de
 tool. Ele integra as campanhas e coordena o **Research Editor** compartilhado:
@@ -146,23 +165,35 @@ no próximo turno, inclusive se chegar durante outro turno ou antes de um reiní
 Pico também usa essa tool para compartilhar achados e orientações; ela nunca
 retoma uma campanha pausada ou com decisão pendente, nem aumenta seus limites.
 
-**Configurações → Campanhas** define orçamento estimado por campanha (padrão
-**US$ 5**), especialistas simultâneos por campanha (**3**) e por laboratório
-(**6**, incluindo agentes iniciados diretamente pelo Pico). Orçamento e limite
-por campanha são copiados na criação; mudar os padrões não modifica campanhas
-existentes. O limite do laboratório é compartilhado e vale para novas admissões;
-reduzi-lo não interrompe execuções já iniciadas. O perfil/modelo do coordenador
-é escolhido na criação e conservado na retomada.
+**Configurações → Campanhas** define o limite de consumo estimado por campanha
+(padrão **US$ 5**), especialistas simultâneos por campanha (**2**) e por
+laboratório (**3**, incluindo agentes iniciados diretamente pelo Pico). Os
+padrões são baixos de propósito: os limites da assinatura pressupõem uso
+individual comum. Limite e especialistas por campanha são copiados na criação;
+mudar os padrões não modifica campanhas existentes. O limite do laboratório é
+compartilhado e vale para novas admissões; reduzi-lo não interrompe execuções já
+iniciadas. O perfil/modelo do coordenador é escolhido na criação e conservado na
+retomada.
 
-O uso soma coordenador e especialistas, incluindo requisições de compactação
-do Pi. O custo é uma estimativa calculada pelo Pi com os preços do modelo; modelos
-sem preços configurados não permitem impor um limite monetário confiável. Chamadas
-já em andamento podem ultrapassar o orçamento. Jobs e serviços externos não entram
-nessa estimativa. Antes de novas requisições e tools, o servidor verifica o estado
-e o orçamento. Ao atingir o limite, a campanha fica com **decisão pendente**:
-o pesquisador pode acrescentar orçamento e retomar a mesma sessão, deixá-la
-pendente ou encerrar preservando o trabalho parcial. O coordenador não pode
-aumentar o próprio limite.
+O consumo soma coordenador e especialistas, inclusive compactações, e é a
+estimativa que o Claude Code calcula a preço de API. Com a assinatura isso não
+é cobrança: é uma medida de consumo, e o limite real é o do plano. O Claude
+Code informa o consumo de um turno quando o turno termina, então as tools da
+resposta que passou do limite ainda podem rodar, mas nenhuma nova requisição é
+feita. Cada processo do Claude Code também recebe o saldo como `maxBudgetUsd`,
+como rede de segurança. Jobs e serviços externos não entram nessa estimativa.
+Antes de novos turnos e tools, o servidor verifica o estado e o saldo. Ao
+atingir o limite, a campanha fica com **decisão pendente**: o pesquisador pode
+ampliar o limite e retomar a mesma conversa, deixá-la pendente ou encerrar
+preservando o trabalho parcial. O coordenador não pode aumentar o próprio
+limite.
+
+Quando o Claude Code avisa que o limite de uso do plano foi atingido, o turno
+em andamento para e a campanha fica pendente com o motivo **Limite do plano
+Claude**; a UI mostra quando o limite libera, se o aviso trouxer esse horário.
+Não há novas tentativas em loop nem troca para outro meio de autenticação: o
+pesquisador retoma a campanha depois do reset. Com o uso extra pago desativado
+na conta Claude, bater no limite apenas pausa o trabalho, sem cobrança.
 
 Capacidade ocupada significa **aguardar**, sem pedir aprovação. Uma tentativa
 sem capacidade não enfileira a tarefa: a campanha retoma quando há espaço e
@@ -172,7 +203,7 @@ de concluir a entrega; havendo jobs em execução, o pesquisador escolhe mantê-
 ou pará-los. Resultados tardios de campanhas encerradas são entregues ao Pico.
 
 O servidor precisa permanecer ligado para executar turnos dos coordenadores.
-Após um reinício, campanhas ativas retomam sua sessão e recebem resultados
+Após um reinício, campanhas ativas retomam sua conversa e recebem resultados
 pendentes, incluindo avisos de especialistas interrompidos. O prompt orienta
 reconciliar jobs existentes antes de iniciar substitutos: jobs desanexados
 sobrevivem e não são reexecutados automaticamente. Campanhas pausadas ou com
@@ -180,7 +211,8 @@ decisão pendente não retomam sozinhas. Agentes efêmeros interrompidos são ma
 no histórico; o coordenador decide se precisa de uma nova tentativa.
 
 `campaigns` persiste estado, plano, resumos, resultado, limites, consumo, modelo,
-sessão e entrega de notificações; `campaign_settings` guarda os padrões globais.
+`session_id` da conversa e entrega de notificações; `campaign_settings` guarda os
+padrões globais.
 Registros salvos com `save_record` dentro da campanha recebem `fields.campaignId`;
 o coordenador usa `author: campaign:<id>` e especialistas mantêm a autoria da
 execução. Arquivos e registros continuam compartilhados no laboratório.
@@ -211,16 +243,23 @@ Os especialistas usam `literature-review`, `research-experiment`,
 o template inicial são escritos em inglês; respostas e páginas acompanham o idioma
 do pesquisador. A migração traduz os nomes e descrições antigos que ainda são os
 padrões de fábrica, preservando instruções personalizadas, modelos e o conteúdo
-original dos laboratórios.
+original dos laboratórios. Do mesmo jeito, prompts, skills e perfis que ainda
+são o padrão de fábrica da versão com Pi, que citava as tools do Pi, são
+trocados pelo texto atual (comparação por hash em `default-upgrades.ts`); textos
+editados pelo pesquisador ficam intactos.
 
-No spawn, o Pi recebe diretamente em memória as instruções e a skill principal
-lidas do banco. `read_skill` lista as skills ou lê uma por ID; `examples: true`
-carrega também seus exemplos. Não há cópias de `SKILL.md` em disco nem descoberta
-automática de skills ou templates externos. A integração usa o carregador de
-contexto, eventos e custom tools do Pi. Modelo, instruções e skills de uma execução
-em andamento permanecem fixos; mudanças valem para novos spawns. O contexto do
-laboratório é atualizado a cada turno. Prompts do coordenador são relidos a cada
-turno, inclusive em sessões continuadas.
+No spawn, o Claude Code recebe as instruções lidas do banco anexadas ao seu
+próprio system prompt, e a skill principal no contexto de cada mensagem.
+`read_skill` lista as skills ou lê uma por ID; `examples: true` carrega também
+seus exemplos. Não há cópias de `SKILL.md` em disco nem descoberta automática
+de skills, `CLAUDE.md`, hooks ou configurações de `~/.claude`: as sessões rodam
+com `settingSources: []` e sem a memória automática do Claude Code. A
+integração usa o system prompt, o hook `UserPromptSubmit`, os eventos do stream
+e um servidor MCP no processo do Pico. Modelo, instruções e skills de uma
+execução em andamento permanecem fixos; mudanças valem para novos spawns. O
+contexto do laboratório é atualizado a cada mensagem. Prompts do coordenador
+são relidos a cada turno, inclusive em conversas retomadas: um prompt editado
+reinicia o processo ocioso, que retoma a mesma conversa.
 
 Configurações tem seções à esquerda (Laboratório, Agentes, Campanhas, Prompts e
 skills), cada uma com um único rodapé que indica alterações não salvas e grava
@@ -276,23 +315,24 @@ permite um segundo envio ao sair e voltar ao lab.
 
 Enquanto Pico trabalha, uma linha de estado mostra a tool em execução, o tempo
 do turno, o número de chamadas e a fila de mensagens; o raciocínio do modelo
-aparece recolhido e renderizado como Markdown. O rodapé mostra tokens e custo
-no formato do idioma. Ao rolar para cima, um botão volta à última mensagem e
-avisa quando chegam mensagens novas.
+aparece recolhido e renderizado como Markdown. O rodapé mostra tokens e consumo
+estimado no formato do idioma. Ao rolar para cima, um botão volta à última
+mensagem e avisa quando chegam mensagens novas.
 
 O chat carrega inicialmente as 50 mensagens mais recentes. Ao subir perto do
 início, busca mais 50 anteriores e preserva a posição de leitura; o botão
 “Carregar mensagens anteriores” também permite buscar ou tentar novamente.
 Atualizações ao vivo conservam as páginas já carregadas, sem duplicar mensagens.
-O total de tokens e custo continua abrangendo o histórico da sessão, mesmo
-quando apenas parte dele está na UI. A paginação afeta só a apresentação:
-o contexto do Pi permanece intacto. `GET /api/labs/:id/chat` aceita `limit`
+O total de tokens e o consumo estimado continuam abrangendo o histórico da
+conversa, mesmo quando apenas parte dele está na UI; o Claude Code informa o
+consumo por conversa, não por mensagem. A paginação afeta só a apresentação:
+o contexto do Claude Code permanece intacto. `GET /api/labs/:id/chat` aceita `limit`
 (padrão 50, máximo 100) e `before` (cursor retornado na página); `before: null`
 indica que não há mensagens anteriores.
 
 A desconexão do stream recupera o estado por HTTP, e a reconexão atualiza o
-histórico. Trocar de laboratório troca a assinatura da UI; as sessões Pi
-continuam pertencendo ao servidor.
+histórico. Trocar de laboratório troca a assinatura da UI; as conversas do
+Claude Code continuam pertencendo ao servidor.
 
 Investigações organiza as perguntas pelos vínculos explícitos com hipóteses,
 experimentos, resultados, conclusões e outros materiais. Fontes compartilhadas
@@ -466,7 +506,7 @@ afirmações científicas ou impedir a gravação de páginas incompletas.
 Cada página conserva seu checkpoint independentemente do estado final do
 agente. Uma falha depois de revisar um tema deixa o restante pendente; reiniciar
 o servidor preserva esse progresso. O próximo turno de trabalho recebe um
-resumo atualizado da cobertura pelo Pi, e Pico pode retomar a partir dele.
+resumo atualizado da cobertura no seu contexto, e Pico pode retomar a partir dele.
 A UI mostra revisão registrada, novidades ou pendências e edição em andamento,
 com referências aos materiais e um botão que prepara o pedido de revisão no chat.
 Concluir a execução ou entregar sua mensagem ao Pico não marca páginas como
@@ -482,37 +522,55 @@ revisadas. HTTP e tools usam o mesmo serviço: `GET /api/labs/:id/editorial` e
 
 ~/.local/share/pico/          estado do Pico (PICO_DATA_DIR)
   pico.sqlite                 labs e contexto, prompts, skills, registros, revisões, jobs e agentes
-  pi/                         perfil Pi do Pico: login, modelos, busca
-  sessions/                   sessões Pi do coordenador por laboratório
-  sessions/agents/<run-id>/    uma sessão Pi nova por spawn
-  sessions/campaigns/<id>/     sessão persistente por campanha
+  claude/                     perfil Claude Code do Pico: login da assinatura e conversas
+    projects/…/<id>.jsonl     uma conversa por laboratório, por campanha e por spawn
 ```
 
 ## Executar
 
-Requisitos: Bun 1.4+. Git é usado para o histórico do workspace.
+Requisitos: Bun 1.4+ e uma assinatura Claude Pro ou Max. O Claude Code vem
+junto com o SDK, como binário nativo da plataforma; não é preciso instalá-lo à
+parte. Git é usado para o histórico do workspace.
 
 ```sh
 bun install
-bun run pi        # no Pi: /login, escolha o provedor, depois /exit
+bun run login     # login oficial do Claude Code com a assinatura, no perfil do Pico
 bun run dev       # UI em http://127.0.0.1:5174
 ```
 
-Crie um laboratório na UI, escolha o modelo e converse. Para produção:
+`bun run login` abre `claude auth login --claudeai` com `CLAUDE_CONFIG_DIR`
+apontando para o perfil do Pico, separado do `~/.claude` do pesquisador;
+`bun run login status` e `bun run login logout` também funcionam. O login de
+Console (cobrança por uso de API) é recusado. Crie um laboratório na UI,
+escolha o modelo e converse. Para produção:
 
 ```sh
 bun run build
 bun start         # UI e API em http://127.0.0.1:4317
 ```
 
+Pico é para uso pessoal, com a conta do próprio pesquisador. Antes do primeiro
+uso, deixe desativado na conta Claude qualquer uso extra pago além dos limites
+da assinatura: assim, ao bater no limite, o trabalho para até o reset em vez
+de gerar cobrança. Na subida, o servidor confirma pelo Claude Code que o login
+ativo é o da assinatura e encerra com um erro pedindo `bun run login` se não
+for. `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL` e
+`CLAUDE_CODE_USE_BEDROCK`, `_VERTEX` ou `_FOUNDRY` são removidas do ambiente de
+todo processo do Claude Code; não há opção para mantê-las. Cada conversa ativa
+é um subprocesso do Claude Code, com sua memória própria.
+
 Se `PICO_DATA_DIR` ainda tiver o `pico.sqlite` da versão anterior do Pico, o
 servidor recusa abrir e explica o que fazer: mover ou apagar `pico.sqlite*`
-e a pasta `labs/` antiga. O perfil Pi em `pi/` continua válido.
+e a pasta `labs/` antiga. O perfil em `claude/` continua válido.
+
+Um banco da versão com Pi pode ser copiado para um `PICO_DATA_DIR` novo:
+laboratórios, registros e campanhas continuam, mas as conversas do Pi não são
+convertidas e recomeçam do zero, e modelos de outros provedores voltam a
+“sem modelo”, para escolher um modelo Claude.
 
 Variáveis: `PICO_DATA_DIR`, `PICO_LABS_DIR` (padrão `~/pico-labs`),
-`PICO_PI_AGENT_DIR`, `PICO_PORT`, `PICO_HOST`. Busca web usa Exa por padrão;
-outros provedores em `<PICO_DATA_DIR>/pi/web-search.json` com a chave no
-ambiente do servidor.
+`PICO_CLAUDE_CONFIG_DIR` (padrão `<PICO_DATA_DIR>/claude`), `PICO_PORT`,
+`PICO_HOST`.
 
 ## Verificar
 
@@ -520,14 +578,14 @@ ambiente do servidor.
 bun run check     # typecheck, lint, testes e build
 ```
 
-Os testes usam um modelo falso OpenAI-compatível e processos reais; nenhum
-teste chama um provedor externo.
-
-Em ambientes que impedem escutar em portas locais, use
-`PICO_TEST_IN_PROCESS_MODEL=1 bun run check`. O mesmo endpoint falso e seus
-eventos SSE são atendidos em memória; sessões Pi, SQLite, arquivos e processos
-continuam reais. Isso verifica o fluxo e a persistência, não a qualidade editorial
-de um modelo real.
+Os testes usam um servidor falso da Messages API da Anthropic
+(`server/tests/fake-anthropic.ts`), que só escuta em `127.0.0.1`, e processos
+reais do Claude Code apontados para ele com uma chave falsa. Nenhuma requisição
+sai para a Anthropic e nada é cobrado. Esse desvio existe só no harness de
+teste: `PICO_TEST_FAKE_MODEL` é recusada fora do `bun test`. Como o Claude Code
+roda como subprocesso, o servidor falso precisa ser HTTP real; o antigo modo em
+memória (`PICO_TEST_IN_PROCESS_MODEL`) deixou de existir. Os testes verificam o
+fluxo e a persistência, não a qualidade de um modelo real.
 
 ## Estrutura
 
@@ -536,11 +594,15 @@ server/src/
   agent-resources.ts  prompts, skills e exemplos no banco
   prompt-defaults.ts  valores iniciais dos prompts
   skill-defaults.ts   procedimentos e exemplos iniciais em inglês
-  main.ts        boot: API, UI estática, sinais
+  default-upgrades.ts troca padrões de fábrica antigos ainda não editados
+  main.ts        boot: confere a assinatura, API, UI estática, sinais
+  login.ts       bun run login: login oficial do Claude Code no perfil do Pico
   app.ts         composição
   contracts.ts   tipos compartilhados com a web
-  sessions.ts    sessão Pi por laboratório e eventos
-  tools.ts       tools do Pico
+  claude-auth.ts ambiente sem rotas pagas, conferência da assinatura e modelos
+  claude-runtime.ts uma conversa do Claude Code: fila, eventos, ganchos e consumo
+  sessions.ts    conversa do laboratório e eventos
+  tools.ts       tools do Pico como servidor MCP
   agent-catalog.ts perfis globais e configuração de modelos
   subagents.ts   spawns efêmeros, resultados e entrega ao coordenador
   campaigns.ts   campanhas, retomada, limites e encaminhamento de resultados

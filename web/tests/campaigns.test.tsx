@@ -12,6 +12,7 @@ const plain = (node: Parameters<typeof renderToStaticMarkup>[0]) =>
   renderToStaticMarkup(node).replace(/\u00a0/g, " ");
 
 import * as polling from "@/web/api/use-poll";
+import { shortTimestamp } from "@/web/components/format";
 import {
   CampaignActivity,
   CampaignTree,
@@ -60,7 +61,8 @@ const campaign: Campaign = {
   provider: "fake",
   model: "fake-1",
   thinking: "off",
-  sessionFile: null,
+  sessionId: null,
+  limitResetsAt: null,
   currentTool: null,
   isWorking: true,
   createdAt: lab.createdAt,
@@ -81,8 +83,8 @@ const run = (id: string, patch: Partial<AgentRun> = {}): AgentRun => ({
   thinking: "off",
   result: "",
   error: null,
-  sessionFile: null,
-  currentTool: "web_search",
+  sessionId: null,
+  currentTool: "WebSearch",
   streamingText: "",
   usage: { cost: 0, total: 0 },
   notified: false,
@@ -148,6 +150,19 @@ test("states have their own colour and sentence", () => {
   expect(campaignStateLine({ ...campaign, status: "paused" })).toBe(
     "Por sua decisão",
   );
+  expect(
+    campaignStateLine({ ...campaign, status: "pending", reason: "rate_limit" }),
+  ).toBe("Limite do plano Claude");
+  expect(
+    campaignStateLine({
+      ...campaign,
+      status: "pending",
+      reason: "rate_limit",
+      limitResetsAt: "2026-10-01T15:00:00.000Z",
+    }),
+  ).toBe(
+    `Limite do plano Claude até ${shortTimestamp("2026-10-01T15:00:00.000Z")}`,
+  );
   const siblings = [
     run("b"),
     run("a"),
@@ -191,7 +206,7 @@ test("sidebar keeps pending roots without workers, hides closed history and sepa
     const html = plain(<CampaignActivity lab={lab} />);
     expect(html).toContain("1 campanha · 1 especialista · US$ 0,50");
     expect(html).toContain('class="campaign-card is-pending"');
-    expect(html).toContain("Orçamento atingido");
+    expect(html).toContain("Consumo estimado atingido");
     expect(html).toContain('class="meter"');
     expect(html).not.toContain("campaign-expand");
     expect(html).toContain("Agentes do Pico");
@@ -228,14 +243,14 @@ test("campaign panel leads with the latest progress, the team, the budget and re
     </>,
   );
   expect(html).toContain('class="chip pending"');
-  expect(html).toContain("Orçamento atingido");
+  expect(html).toContain("Consumo estimado atingido");
   expect(html).toContain("iniciada há 12 minutos");
   expect(html).toContain("Revisando literatura");
   expect(html).toContain("Buscar fontes e confrontar resultados");
   expect(html).toContain("Histórico da campanha · 1");
   expect(html).toContain("US$ 5,02 de US$ 5,00");
   expect(html).toContain('class="meter warn"');
-  expect(html).toContain("Adicionar orçamento (US$)");
+  expect(html).toContain("Ampliar consumo estimado (US$)");
   expect(html).toMatch(/<input[^>]*step="0.01"[^>]*required=""/);
   expect(html).toContain("Retomar");
   expect(html).toContain("Encerrar");
@@ -273,7 +288,7 @@ test("campaign defaults expose budget and both parallelism limits", () => {
       onClose={() => {}}
     />,
   );
-  expect(html).toContain("Orçamento por campanha");
+  expect(html).toContain("Limite de consumo estimado por campanha");
   expect(html).toContain("Especialistas por campanha");
   expect(html).toContain("Especialistas no laboratório");
   expect(html).toContain('value="5"');

@@ -1,37 +1,39 @@
 import { afterEach, expect, test } from "bun:test";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { SessionManager } from "@earendil-works/pi-coding-agent";
+import { noteText, type TranscriptMessage } from "../src/claude-runtime";
 import type { ChatView } from "../src/contracts";
 import { projectMessagePage, projectMessages } from "../src/sessions";
-import { call, request, type Sandbox, sandbox } from "./support";
+import {
+  call,
+  type FakeModel,
+  request,
+  type Sandbox,
+  sandbox,
+  startFakeModel,
+  until,
+} from "./support";
 
-const message = (
-  index: number,
-): Extract<AgentMessage, { role: "user" | "assistant" }> =>
+const at = (index: number) => new Date(index + 1).toISOString();
+
+const message = (index: number): TranscriptMessage =>
   index % 2 === 0
-    ? { role: "user", content: `Pergunta ${index}`, timestamp: index + 1 }
+    ? {
+        type: "user",
+        uuid: `u-${index}`,
+        message: { role: "user", content: `Pergunta ${index}` },
+        timestamp: at(index),
+      }
     : {
-        role: "assistant",
-        content: [{ type: "text", text: `Resposta ${index}` }],
-        api: "openai-completions",
-        provider: "fake",
-        model: "fake-1",
-        stopReason: "stop",
-        timestamp: index + 1,
-        usage: {
-          input: 1,
-          output: 1,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 2,
-          cost: {
-            input: 0,
-            output: 0,
-            cacheRead: 0,
-            cacheWrite: 0,
-            total: 0.01,
-          },
+        type: "assistant",
+        uuid: `a-${index}`,
+        message: {
+          id: `msg_${index}`,
+          role: "assistant",
+          model: "claude-sonnet-5-5",
+          content: [{ type: "text", text: `Resposta ${index}` }],
+          stop_reason: "end_turn",
+          usage: { input_tokens: 1, output_tokens: 1 },
         },
+        timestamp: at(index),
       };
 
 test("chat pages retrieve recent and preceding messages with stable IDs and complete usage", () => {
@@ -50,7 +52,6 @@ test("chat pages retrieve recent and preceding messages with stable IDs and comp
   );
   expect(newest.usage.total).toBe(136);
   expect(middle.usage).toEqual(newest.usage);
-  expect(newest.usage.cost).toBeCloseTo(0.68);
   // Messages appended while scrolling do not move an earlier page's boundary.
   expect(
     projectMessagePage([...all, message(137)], { before: 87 }).messages,
@@ -77,35 +78,162 @@ test("chat pagination bounds requests and rejects invalid cursors", () => {
     );
 });
 
-let box: Sandbox | undefined;
-afterEach(async () => {
-  await box?.cleanup();
-  box = undefined;
+test("the projection joins one response's blocks, pairs tool results and shows notes as system messages", () => {
+  const response = {
+    id: "msg_1",
+    role: "assistant",
+    model: "claude-sonnet-5-5",
+    stop_reason: "tool_use",
+    usage: {
+      input_tokens: 10,
+      cache_read_input_tokens: 5,
+      output_tokens: 3,
+    },
+  };
+  const entries: TranscriptMessage[] = [
+    {
+      type: "user",
+      uuid: "u-1",
+      message: { role: "user", content: "Salve a pergunta" },
+      timestamp: at(1),
+    },
+    {
+      type: "assistant",
+      uuid: "a-1",
+      message: {
+        ...response,
+        content: [{ type: "thinking", thinking: "Planejando" }],
+      },
+      timestamp: at(2),
+    },
+    {
+      type: "assistant",
+      uuid: "a-2",
+      message: {
+        ...response,
+        content: [
+          { type: "text", text: "Vou salvar." },
+          {
+            type: "tool_use",
+            id: "toolu_1",
+            name: "mcp__pico__save_record",
+            input: { kind: "question" },
+          },
+        ],
+      },
+      timestamp: at(3),
+    },
+    {
+      type: "user",
+      uuid: "u-2",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "toolu_1",
+            content: [{ type: "text", text: '{"saved":"q-1"}' }],
+          },
+        ],
+      },
+      timestamp: at(4),
+    },
+    {
+      type: "user",
+      uuid: "u-3",
+      message: {
+        role: "user",
+        content: noteText("campaign-result", "Agent run-1 completed", {
+          source: "run-1",
+        }),
+      },
+      timestamp: at(5),
+    },
+  ];
+  expect(projectMessages(entries)).toEqual([
+    { id: "m-0", role: "user", text: "Salve a pergunta", timestamp: 2 },
+    {
+      id: "m-1",
+      role: "assistant",
+      text: "Vou salvar.",
+      thinking: "Planejando",
+      toolCalls: [
+        { id: "toolu_1", name: "save_record", arguments: { kind: "question" } },
+      ],
+      model: "anthropic/claude-sonnet-5-5",
+      stopReason: "tool_use",
+      usage: { input: 15, output: 3, total: 18, cost: 0 },
+      timestamp: 3,
+    },
+    {
+      id: "m-2",
+      role: "tool",
+      text: '{"saved":"q-1"}',
+      toolCallId: "toolu_1",
+      toolName: "save_record",
+      isError: false,
+      timestamp: 5,
+    },
+    {
+      id: "m-3",
+      role: "system",
+      kind: "campaign-result",
+      text: "Agent run-1 completed",
+      timestamp: 6,
+    },
+  ]);
 });
 
-test("HTTP paginates a persisted Pi session without changing its messages or crossing labs", async () => {
-  box = sandbox();
+let box: Sandbox | undefined;
+let fake: FakeModel | undefined;
+afterEach(async () => {
+  await box?.cleanup();
+  fake?.stop();
+  box = undefined;
+  fake = undefined;
+});
+
+test("HTTP paginates a persisted Claude Code session without changing its messages or crossing labs", async () => {
+  fake = startFakeModel();
+  box = sandbox({ fakeModelUrl: fake.url });
   const { app } = box;
-  const lab = await app.labs.create({ name: "Histórico paginado" });
+  const lab = await app.labs.create({
+    name: "Histórico paginado",
+    provider: "anthropic",
+    model: "sonnet",
+    thinking: "off",
+  });
   const other = await app.labs.create({ name: "Outro chat" });
-  const manager = SessionManager.create(lab.path, app.paths.sessionsDir);
-  const all = Array.from({ length: 122 }, (_, index) => message(index));
-  for (const item of all) manager.appendMessage(item);
-  const latest = await call<ChatView>(app, `/labs/${lab.id}/chat`);
-  expect(latest.messages).toHaveLength(50);
-  expect(latest.before).toBe(72);
+  for (const index of [0, 1, 2]) {
+    fake.script.push({ text: `Resposta ${index}` });
+    await app.sessions.send(lab.id, `Pergunta ${index}`);
+    await until(
+      async () => !(await app.sessions.state(lab.id)).streaming,
+      15_000,
+    );
+  }
+  const latest = await call<ChatView>(app, `/labs/${lab.id}/chat?limit=4`);
+  expect(latest.messages.map((item) => item.text)).toEqual([
+    "Pergunta 1",
+    "Resposta 1",
+    "Pergunta 2",
+    "Resposta 2",
+  ]);
+  expect(latest.before).toBe(2);
   expect(latest.state.labId).toBe(lab.id);
+  expect(latest.usage.total).toBeGreaterThan(0);
   const earlier = await call<ChatView>(
     app,
-    `/labs/${lab.id}/chat?limit=20&before=72`,
+    `/labs/${lab.id}/chat?limit=20&before=2`,
   );
-  expect(earlier.messages.map((item) => item.id)).toEqual(
-    Array.from({ length: 20 }, (_, index) => `m-${52 + index}`),
-  );
-  expect(earlier.before).toBe(52);
+  expect(earlier.messages.map((item) => item.id)).toEqual(["m-0", "m-1"]);
+  expect(earlier.before).toBeNull();
   expect(earlier.usage).toEqual(latest.usage);
-  expect(await app.sessions.messages(lab.id)).toEqual(projectMessages(all));
-  const foreign = await call<ChatView>(app, `/labs/${other.id}/chat?before=72`);
+  expect(await app.sessions.messages(lab.id)).toEqual([
+    ...earlier.messages,
+    ...latest.messages,
+  ]);
+  const foreign = await call<ChatView>(app, `/labs/${other.id}/chat?before=2`);
   expect(foreign.messages).toEqual([]);
   expect(foreign.before).toBeNull();
   expect(
@@ -114,4 +242,4 @@ test("HTTP paginates a persisted Pi session without changing its messages or cro
   expect(
     (await app.fetch(request(`/labs/${lab.id}/chat?limit=0`))).status,
   ).toBe(400);
-});
+}, 40_000);

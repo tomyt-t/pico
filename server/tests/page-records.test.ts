@@ -1,32 +1,25 @@
 import { afterEach, expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
-import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type {
   PageFields,
   RecordDetailView,
   ResearchRecord,
 } from "../src/contracts";
 import { createPicoTools } from "../src/tools";
-import { call, request, type Sandbox, sandbox } from "./support";
+import {
+  call,
+  runTool as execute,
+  request,
+  type Sandbox,
+  sandbox,
+} from "./support";
 
 let box: Sandbox | undefined;
 afterEach(async () => {
   await box?.cleanup();
   box = undefined;
 });
-
-async function execute(tool: ToolDefinition, params: Record<string, unknown>) {
-  const result = await tool.execute(
-    "page-test",
-    params,
-    undefined,
-    undefined,
-    {} as Parameters<typeof tool.execute>[4],
-  );
-  const content = result.content.find((part) => part.type === "text");
-  if (content?.type !== "text") throw new Error("Missing tool text");
-  return JSON.parse(content.text);
-}
 
 test("pages use existing record revisions and replace whole block lists", async () => {
   box = sandbox();
@@ -207,5 +200,5 @@ test("tools and HTTP share pages, free fields and laboratory isolation", async (
     execute(save, { kind: "page", id: foreign.id, title: "Overwrite" }),
   ).rejects.toThrow("belongs to another laboratory");
   expect(app.records.get(other.id, foreign.id)).toEqual(foreign);
-  expect(readdirSync(app.paths.sessionsDir)).toEqual([]);
+  expect(existsSync(join(app.paths.claudeConfigDir, "projects"))).toBe(false);
 });

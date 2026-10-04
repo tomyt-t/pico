@@ -1,11 +1,16 @@
 import type { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
-import {
-  type AgentSession,
-  SessionManager,
-} from "@earendil-works/pi-coding-agent";
 import type { AgentCatalog } from "./agent-catalog";
 import type { AgentResources } from "./agent-resources";
+import {
+  type ClaudeSession,
+  type ClaudeSessionOptions,
+  displayToolName,
+  parseNote,
+  planLimitMessage,
+  planLimitReset,
+  readTranscript,
+  textOf,
+} from "./claude-runtime";
 import type {
   Campaign,
   CampaignControl,
@@ -46,7 +51,10 @@ interface Row {
   provider: string;
   model: string;
   thinking: string;
-  session_file: string | null;
+  session_id: string | null;
+  session_cost: number;
+  session_tokens: number;
+  limit_resets_at: string | null;
   wake_requested: number;
   progress_version: number;
   notified_version: number;
@@ -57,8 +65,8 @@ interface Row {
 }
 
 interface Entry {
-  opening?: Promise<AgentSession>;
-  session?: AgentSession;
+  opening?: Promise<ClaudeSession>;
+  session?: ClaudeSession;
   turn?: Promise<void>;
   receiving: number;
   currentTool: string | null;
@@ -70,7 +78,7 @@ interface Options {
   resources: AgentResources;
   subagents: Subagents;
   jobs: Jobs;
-  createSession: (lab: Lab, campaign: Campaign) => Promise<AgentSession>;
+  createSession: (lab: Lab, campaign: Campaign) => Promise<ClaudeSession>;
   notify: (labId: string, text: string) => Promise<boolean>;
 }
 
@@ -89,7 +97,9 @@ function positive(value: number, name: string, integer = false): void {
     );
 }
 
-/** Persistent campaign state; Pi owns turns, context, compaction and model retries. */
+/** Persistent campaign state; Claude Code owns turns, context, compaction
+ *  and model retries. Spend is an estimate at API prices: on a Claude plan
+ *  it measures consumption, while the plan's own limits are the real cap. */
 export class Campaigns {
   private readonly entries = new Map<string, Entry>();
   private readonly controlling = new Set<string>();
@@ -163,7 +173,8 @@ export class Campaigns {
       provider: row.provider,
       model: row.model,
       thinking: row.thinking,
-      sessionFile: row.session_file,
+      sessionId: row.session_id,
+      limitResetsAt: row.limit_resets_at,
       currentTool: entry?.currentTool ?? null,
       isWorking: !!entry?.turn,
       createdAt: row.created_at,
@@ -251,17 +262,16 @@ export class Campaigns {
     return this.get(labId, id);
   }
 
-  detail(
+  async detail(
     labId: string,
     id: string,
     options: { before?: number; limit?: number } = {},
-  ): CampaignDetail {
+  ): Promise<CampaignDetail> {
     const campaign = this.get(labId, id);
     const messages =
       this.entries.get(id)?.session?.messages ??
-      (campaign.sessionFile && existsSync(campaign.sessionFile)
-        ? SessionManager.open(campaign.sessionFile).buildSessionContext()
-            .messages
+      (campaign.sessionId
+        ? await readTranscript(campaign.sessionId).catch(() => [])
         : []);
     return {
       campaign,
@@ -278,7 +288,7 @@ export class Campaigns {
     notify = false,
   ): void {
     this.db.run(
-      "UPDATE campaigns SET status=?, reason=?, wake_requested=?, updated_at=?, ended_at=?, progress_version=progress_version+? WHERE id=?",
+      "UPDATE campaigns SET status=?, reason=?, limit_resets_at=NULL, wake_requested=?, updated_at=?, ended_at=?, progress_version=progress_version+? WHERE id=?",
       [
         status,
         reason,
@@ -302,7 +312,7 @@ export class Campaigns {
     ]);
   }
 
-  /** Guard every model call, including Pi's retries and compaction requests. */
+  /** Guard every turn and tool call of the coordinator and its workers. */
   assertRunnable(labId: string, id: string, coordinator = false): void {
     if (this.closing) throw conflict("Server is shutting down");
     let campaign = this.get(labId, id);
@@ -342,48 +352,77 @@ export class Campaigns {
       this.setState(campaign, "pending", "budget", true);
   }
 
-  attach(
-    session: AgentSession,
+  /** Session hooks for the coordinator and its workers. Once the campaign
+   *  cannot run, prompts are refused, tool calls denied and a turn ends after
+   *  its tools instead of asking the model for another step. Every turn's
+   *  consumption is recorded; Claude Code enforces the remaining balance.
+   *  A plan limit reached by any of them stops the campaign's turns. */
+  sessionOptions(
     labId: string,
     id: string,
     coordinator: boolean,
-  ): void {
-    const stream = session.agent.streamFunction;
-    session.agent.streamFunction = async (...args) => {
-      this.assertRunnable(labId, id, coordinator);
-      const response = await stream(...args);
-      // result() observes the final usage without consuming Pi's event iterator.
-      void response
-        .result()
-        .then((message) =>
-          this.recordUsage(
-            labId,
-            id,
-            message.usage.totalTokens,
-            message.usage.cost.total,
-          ),
-        )
-        .catch(() => {});
-      return response;
+  ): Pick<
+    ClaudeSessionOptions,
+    | "onBeforePrompt"
+    | "onBeforeTool"
+    | "stopAfterTools"
+    | "onUsage"
+    | "onPlanLimit"
+    | "maxBudgetUsd"
+    | "usageBaseline"
+  > {
+    const row = this.row(labId, id);
+    return {
+      onBeforePrompt: () => this.assertRunnable(labId, id, coordinator),
+      onBeforeTool: () => this.assertRunnable(labId, id, coordinator),
+      stopAfterTools: () => {
+        try {
+          this.assertRunnable(labId, id, coordinator);
+          return null;
+        } catch (error) {
+          return errorMessage(error);
+        }
+      },
+      onUsage: ({ tokens, cost }) => {
+        // The coordinator's totals are its baseline when it resumes.
+        if (coordinator)
+          this.db.run(
+            "UPDATE campaigns SET session_cost=session_cost+?, session_tokens=session_tokens+? WHERE id=?",
+            [cost, tokens, id],
+          );
+        this.recordUsage(labId, id, tokens, cost);
+      },
+      onPlanLimit: (resetsAt) => this.planLimitReached(labId, id, resetsAt),
+      maxBudgetUsd: () => {
+        const campaign = this.get(labId, id);
+        return Math.max(0, campaign.budgetUsd - campaign.usage.cost);
+      },
+      ...(coordinator
+        ? {
+            usageBaseline: {
+              cost: row.session_cost,
+              tokens: row.session_tokens,
+            },
+          }
+        : {}),
     };
-    const before = session.agent.beforeToolCall;
-    session.agent.beforeToolCall = async (...args) => {
-      try {
-        this.assertRunnable(labId, id, coordinator);
-      } catch (error) {
-        return { block: true, reason: errorMessage(error), terminate: true };
-      }
-      return before?.(...args);
-    };
-    const stop = session.agent.shouldStopAfterTurn;
-    session.agent.shouldStopAfterTurn = async (...args) => {
-      try {
-        this.assertRunnable(labId, id, coordinator);
-      } catch {
-        return true;
-      }
-      return (await stop?.(...args)) ?? false;
-    };
+  }
+
+  /** A plan limit leaves the campaign pending for the researcher, who
+   *  resumes it after the reset. No retry loop and never another way to
+   *  authenticate. */
+  private planLimitReached(labId: string, id: string, resetsAt?: number): void {
+    const campaign = this.get(labId, id);
+    if (campaign.status !== "active" && campaign.status !== "waiting") return;
+    this.db.run("UPDATE campaigns SET summary=? WHERE id=?", [
+      planLimitMessage(resetsAt),
+      id,
+    ]);
+    this.setState(campaign, "pending", "rate_limit", true);
+    this.db.run("UPDATE campaigns SET limit_resets_at=? WHERE id=?", [
+      planLimitReset(resetsAt),
+      id,
+    ]);
   }
 
   capacity(labId: string, campaignId?: string | null): boolean {
@@ -485,19 +524,20 @@ export class Campaigns {
     return entry;
   }
 
-  private open(campaign: Campaign): Promise<AgentSession> {
+  private open(campaign: Campaign): Promise<ClaudeSession> {
     const entry = this.entry(campaign.id);
     entry.opening ??= this.options
       .createSession(this.options.labs.get(campaign.labId), campaign)
       .then((session) => {
         entry.session = session;
-        this.db.run("UPDATE campaigns SET session_file=? WHERE id=?", [
-          session.sessionFile ?? null,
-          campaign.id,
-        ]);
         session.subscribe((event) => {
+          if (session.sessionId)
+            this.db.run(
+              "UPDATE campaigns SET session_id=? WHERE id=? AND session_id IS NOT ?",
+              [session.sessionId, campaign.id, session.sessionId],
+            );
           if (event.type === "tool_execution_start")
-            entry.currentTool = event.toolName;
+            entry.currentTool = displayToolName(event.toolName);
           if (event.type === "tool_execution_end") entry.currentTool = null;
           if (
             event.type === "agent_start" &&
@@ -515,7 +555,7 @@ export class Campaigns {
     return entry.opening;
   }
 
-  /** Receipt means the outcome was durably appended to its owning Pi session. */
+  /** Receipt means the outcome was durably appended to its owning session. */
   async receive(
     labId: string,
     id: string,
@@ -536,22 +576,22 @@ export class Campaigns {
       const session = await this.open(campaign);
       if (this.closing) return false;
       if (
-        !session.messages.some(
-          (message) =>
-            message.role === "custom" &&
-            message.customType === "campaign-result" &&
-            (message.details as { source?: string })?.source === source,
-        )
+        !session.messages.some((entry) => {
+          if (entry.type !== "user") return false;
+          const note = parseNote(
+            textOf((entry.message as { content?: unknown }).content),
+          );
+          return (
+            note?.kind === "campaign-result" && note.details.source === source
+          );
+        })
       )
-        await session.sendCustomMessage(
-          {
-            customType: "campaign-result",
-            content,
-            display: true,
-            details: { source },
-          },
-          { triggerTurn: false },
-        );
+        await session.appendNote("campaign-result", content, { source });
+      if (session.sessionId)
+        this.db.run("UPDATE campaigns SET session_id=? WHERE id=?", [
+          session.sessionId,
+          id,
+        ]);
       const current = this.get(labId, id);
       if (current.status === "waiting" || current.status === "active")
         this.setState(current, "active", null);
@@ -605,14 +645,7 @@ export class Campaigns {
         await entry.turn;
         if (input.message?.trim()) {
           const session = await this.open(campaign);
-          await session.sendCustomMessage(
-            {
-              customType: "campaign-direction",
-              content: input.message,
-              display: true,
-            },
-            { triggerTurn: false },
-          );
+          await session.appendNote("campaign-direction", input.message);
         }
         this.db.run(
           "UPDATE campaigns SET budget_usd=?, max_agents=? WHERE id=?",
@@ -668,20 +701,12 @@ export class Campaigns {
       );
       await session.prompt(
         this.options.resources.prompt("campaign-wake").content,
-        { expandPromptTemplates: false },
       );
       const current = this.get(campaign.labId, campaign.id);
-      const last = [...session.messages]
-        .reverse()
-        .find((message) => message.role === "assistant");
-      if (
-        !this.closing &&
-        current.status === "active" &&
-        last?.role === "assistant" &&
-        (last.stopReason === "error" || last.stopReason === "aborted")
-      ) {
+      const last = session.lastResult;
+      if (!this.closing && current.status === "active" && last && !last.ok) {
         this.db.run("UPDATE campaigns SET summary=? WHERE id=?", [
-          last.errorMessage || "The coordinator turn was interrupted",
+          last.text || "The coordinator turn was interrupted",
           campaign.id,
         ]);
         this.setState(current, "pending", "error", true);
@@ -705,14 +730,7 @@ export class Campaigns {
           jobs.some((job) => job.status === "running" || !job.notified);
         if (hasWork) this.setState(current, "waiting", "results");
         else {
-          const summary =
-            last?.role === "assistant"
-              ? last.errorMessage ||
-                last.content
-                  .filter((part) => part.type === "text")
-                  .map((part) => part.text)
-                  .join("")
-              : "";
+          const summary = last?.text ?? "";
           if (summary)
             this.db.run("UPDATE campaigns SET summary=? WHERE id=?", [
               summary,
@@ -737,7 +755,7 @@ export class Campaigns {
         `Pico: campaign ${campaign.id} progress`,
       ).catch(() => {});
       if (!this.closing && terminal(this.get(campaign.labId, campaign.id))) {
-        entry.session?.dispose();
+        await entry.session?.dispose().catch(() => {});
         this.entries.delete(campaign.id);
       }
     }
@@ -824,7 +842,7 @@ export class Campaigns {
         const session = await entry.opening?.catch(() => undefined);
         await session?.abort();
         await entry.turn;
-        session?.dispose();
+        await session?.dispose().catch(() => {});
       }),
     );
     await this.polling;

@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { open } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import type { Job, JobStatus, Metric } from "./contracts";
 import { now } from "./db";
 import { badRequest, conflict, errorMessage, notFound } from "./errors";
@@ -160,9 +160,11 @@ export function resolveMetricsPath(
 ): string {
   const path = given?.trim() || "metrics.json";
   if (isAbsolute(path)) return path;
+  const folder = resolve(cwd);
   const fromLab = resolve(labPath, path);
-  if (fromLab === cwd || fromLab.startsWith(`${cwd}/`)) return fromLab;
-  return resolve(cwd, path);
+  if (fromLab === folder || fromLab.startsWith(`${folder}${sep}`))
+    return fromLab;
+  return resolve(folder, path);
 }
 
 export class Jobs {

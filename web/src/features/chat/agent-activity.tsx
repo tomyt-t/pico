@@ -145,7 +145,7 @@ export function AgentRunHeader({
         {shortDuration(run.createdAt, run.endedAt, now)}
       </span>
       <span className="mono">
-        {run.provider} / {run.model}
+        {run.model}
         {run.thinking && run.thinking !== "off" ? ` · ${run.thinking}` : ""}
       </span>
     </SheetHeader>

@@ -1,33 +1,18 @@
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Api, Model, ThinkingLevel } from "@earendil-works/pi-ai";
-import {
-  type AgentSession,
-  type AgentSessionEvent,
-  createAgentSession,
-  DefaultResourceLoader,
-  ModelRuntime,
-  SessionManager,
-  SettingsManager,
-} from "@earendil-works/pi-coding-agent";
 import type { AgentCatalog } from "./agent-catalog";
 import type { AgentResources } from "./agent-resources";
 import type { Campaigns } from "./campaigns";
+import { claudeEnv, claudeModels } from "./claude-auth";
+import {
+  ClaudeSession,
+  type ClaudeSessionEvent,
+  type ClaudeSessionOptions,
+  displayToolName,
+  parseNote,
+  planLimitMessage,
+  type TranscriptMessage,
+  textOf,
+} from "./claude-runtime";
 import type { PicoPaths } from "./config";
-import type { Editorial } from "./editorial";
-import { badRequest, errorMessage } from "./errors";
-import { commitAll } from "./git";
-import type { Jobs } from "./jobs";
-import type { Lab, Labs } from "./labs";
-import type { Records } from "./records";
-import type { Subagents } from "./subagents";
-import { createPicoTools } from "./tools";
-
-const builtinTools = ["read", "bash", "edit", "write", "grep", "find", "ls"];
-const webTools = ["web_search", "fetch_content", "get_search_content"];
-
 import type {
   AgentDefinition,
   AgentRun,
@@ -36,17 +21,27 @@ import type {
   ModelSummary,
   SessionEvent,
   SessionState,
+  ThinkingLevel,
   UiMessage,
 } from "./contracts";
+import type { Editorial } from "./editorial";
+import { badRequest, errorMessage } from "./errors";
+import { commitAll } from "./git";
+import type { Jobs } from "./jobs";
+import type { Lab, Labs } from "./labs";
+import type { Records } from "./records";
+import type { Subagents } from "./subagents";
+import { picoMcpServer } from "./tools";
 
 export type { ModelSummary, SessionEvent, SessionState, UiMessage };
 
 interface Entry {
   lab: Lab;
-  session: AgentSession;
+  session: ClaudeSession;
+  /** The conversation id stored for the laboratory. */
+  savedSessionId: string | null;
   listeners: Set<(event: SessionEvent) => void>;
   lastError: string | null;
-  queue: { steering: string[]; followUp: string[] };
   streamingText: string;
 }
 
@@ -62,140 +57,153 @@ export interface SessionDependencies {
   campaigns: Campaigns;
 }
 
-function webAccessExtension(): string {
-  return join(
-    dirname(fileURLToPath(import.meta.resolve("pi-web-access/package.json"))),
-    "dist",
-  );
-}
+type Content = { type?: string; [key: string]: unknown }[];
+type UiDraft = Omit<UiMessage, "id">;
 
-export function projectMessages(
-  messages: readonly AgentMessage[],
-  offset = 0,
-): UiMessage[] {
-  const result: UiMessage[] = [];
-  messages.forEach((message, index) => {
-    const id = `m-${offset + index}`;
-    const timestamp = message.timestamp;
-    switch (message.role) {
-      case "user": {
-        const text =
-          typeof message.content === "string"
-            ? message.content
-            : message.content
-                .map((part) => (part.type === "text" ? part.text : "[image]"))
-                .join("\n");
-        result.push({ id, role: "user", text, timestamp });
-        break;
-      }
-      case "assistant": {
-        const text = message.content
-          .filter((part) => part.type === "text")
-          .map((part) => part.text)
-          .join("");
-        const thinking = message.content
-          .filter((part) => part.type === "thinking")
-          .map((part) => part.thinking)
-          .join("\n");
-        const toolCalls = message.content
-          .filter((part) => part.type === "toolCall")
-          .map((part) => ({
-            id: part.id,
-            name: part.name,
-            arguments: part.arguments,
-          }));
-        result.push({
+const timeOf = (entry: TranscriptMessage): number =>
+  entry.timestamp ? Date.parse(entry.timestamp) || 0 : 0;
+
+const contentText = (part: Record<string, unknown>): string =>
+  typeof part.content === "string"
+    ? part.content
+    : Array.isArray(part.content)
+      ? part.content
+          .map((item: { type?: string; text?: string }) =>
+            item?.type === "text" ? (item.text ?? "") : "[image]",
+          )
+          .join("\n")
+      : "";
+
+/** Flattens a Claude Code transcript into the messages the UI shows. One API
+ *  response is stored as several entries (one per block) sharing message.id;
+ *  they become one assistant message with its usage counted once. */
+function draftMessages(entries: readonly TranscriptMessage[]): UiDraft[] {
+  const result: UiDraft[] = [];
+  const toolNames = new Map<string, string>();
+  let assistant: { id: string; draft: UiDraft } | undefined;
+  for (const entry of entries) {
+    const message = entry.message as {
+      id?: string;
+      content?: unknown;
+      model?: string;
+      stop_reason?: string | null;
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        cache_read_input_tokens?: number;
+        cache_creation_input_tokens?: number;
+      };
+      subtype?: string;
+    } | null;
+    if (!message) continue;
+    const timestamp = timeOf(entry);
+    if (entry.type === "assistant") {
+      const content = (
+        Array.isArray(message.content) ? message.content : []
+      ) as Content;
+      const id = message.id ?? entry.uuid;
+      if (assistant?.id !== id) {
+        assistant = {
           id,
-          role: "assistant",
-          text,
-          ...(thinking ? { thinking } : {}),
-          ...(toolCalls.length ? { toolCalls } : {}),
-          model: `${message.provider}/${message.model}`,
-          stopReason: message.stopReason,
-          ...(message.errorMessage
-            ? { errorMessage: message.errorMessage }
-            : {}),
-          usage: {
-            input: message.usage.input,
-            output: message.usage.output,
-            total: message.usage.totalTokens,
-            cost: message.usage.cost.total,
+          draft: {
+            role: "assistant",
+            text: "",
+            model: `anthropic/${message.model ?? "unknown"}`,
+            timestamp,
           },
-          timestamp,
-        });
-        break;
+        };
+        result.push(assistant.draft);
       }
-      case "toolResult": {
-        const text = message.content
-          .map((part) => (part.type === "text" ? part.text : "[image]"))
-          .join("\n");
-        result.push({
-          id,
-          role: "tool",
-          text,
-          toolCallId: message.toolCallId,
-          toolName: message.toolName,
-          isError: message.isError,
-          timestamp,
-        });
-        break;
+      const draft = assistant.draft;
+      for (const part of content) {
+        if (part.type === "text") draft.text += String(part.text ?? "");
+        else if (part.type === "thinking" && part.thinking)
+          draft.thinking = [draft.thinking, String(part.thinking)]
+            .filter(Boolean)
+            .join("\n");
+        else if (part.type === "tool_use") {
+          toolNames.set(String(part.id), String(part.name));
+          draft.toolCalls = [
+            ...(draft.toolCalls ?? []),
+            {
+              id: String(part.id),
+              name: displayToolName(String(part.name)),
+              arguments: part.input,
+            },
+          ];
+        }
       }
-      case "bashExecution":
-        result.push({
-          id,
-          role: "tool",
-          toolName: "bash",
-          text: `$ ${message.command}\n${message.output}`,
-          isError: message.exitCode !== 0 && message.exitCode !== undefined,
-          timestamp,
-        });
-        break;
-      case "custom": {
-        const text =
-          typeof message.content === "string"
-            ? message.content
-            : message.content
-                .map((part) => (part.type === "text" ? part.text : "[image]"))
-                .join("\n");
-        result.push({
-          id,
-          role: "system",
-          kind: message.customType,
-          text,
-          timestamp,
-        });
-        break;
+      if (message.stop_reason) draft.stopReason = message.stop_reason;
+      const usage = message.usage;
+      if (usage) {
+        const input =
+          (usage.input_tokens ?? 0) +
+          (usage.cache_read_input_tokens ?? 0) +
+          (usage.cache_creation_input_tokens ?? 0);
+        const output = usage.output_tokens ?? 0;
+        draft.usage = { input, output, total: input + output, cost: 0 };
       }
-      case "compactionSummary":
+      continue;
+    }
+    assistant = undefined;
+    if (entry.type === "system") {
+      if (message.subtype === "compact_boundary")
         result.push({
-          id,
           role: "system",
           kind: "compaction",
-          text: message.summary,
+          text: "Context compacted",
           timestamp,
         });
-        break;
-      case "branchSummary":
-        result.push({
-          id,
-          role: "system",
-          kind: "branch",
-          text: message.summary,
-          timestamp,
-        });
-        break;
-      default:
-        break;
+      continue;
     }
-  });
+    if (typeof message.content === "string") {
+      const note = parseNote(message.content);
+      result.push(
+        note
+          ? { role: "system", kind: note.kind, text: note.content, timestamp }
+          : { role: "user", text: message.content, timestamp },
+      );
+      continue;
+    }
+    const content = (
+      Array.isArray(message.content) ? message.content : []
+    ) as Content;
+    const texts: string[] = [];
+    for (const part of content) {
+      if (part.type === "tool_result") {
+        const name = toolNames.get(String(part.tool_use_id)) ?? "";
+        result.push({
+          role: "tool",
+          text: contentText(part),
+          toolCallId: String(part.tool_use_id),
+          toolName: displayToolName(name),
+          isError: part.is_error === true,
+          timestamp,
+        });
+      } else if (part.type === "text") texts.push(String(part.text ?? ""));
+      else if (part.type === "image") texts.push("[image]");
+    }
+    if (texts.length)
+      result.push({ role: "user", text: texts.join("\n"), timestamp });
+  }
   return result;
 }
 
-/** Paginate only the UI projection; the Pi session keeps its complete context. */
+export function projectMessages(
+  entries: readonly TranscriptMessage[],
+): UiMessage[] {
+  return draftMessages(entries).map((draft, index) => ({
+    id: `m-${index}`,
+    ...draft,
+  }));
+}
+
+/** Paginate only the UI projection; the Claude session keeps its context. */
 export function projectMessagePage(
-  messages: readonly AgentMessage[],
+  entries: readonly TranscriptMessage[],
   options: { before?: number; limit?: number } = {},
 ): ChatMessagePage {
+  const messages = projectMessages(entries);
   const limit = options.limit ?? 50;
   const before = options.before ?? messages.length;
   if (!Number.isSafeInteger(limit) || limit < 1)
@@ -205,62 +213,56 @@ export function projectMessagePage(
   const end = Math.min(before, messages.length);
   const start = Math.max(0, end - Math.min(limit, 100));
   const usage = { total: 0, cost: 0 };
-  for (const message of messages) {
-    if (message.role === "assistant") {
-      usage.total += message.usage.totalTokens;
-      usage.cost += message.usage.cost.total;
-    }
-  }
+  for (const message of messages)
+    if (message.usage) usage.total += message.usage.total;
   return {
-    messages: projectMessages(messages.slice(start, end), start),
+    messages: messages.slice(start, end),
     before: start > 0 ? start : null,
     usage,
   };
 }
 
+/** True when a user message of the conversation holds this text. Claude
+ *  Code joins queued messages sent close together into one user message. */
+export function hasUserText(
+  entries: readonly TranscriptMessage[],
+  text: string,
+): boolean {
+  return entries.some(
+    (entry) =>
+      entry.type === "user" &&
+      textOf((entry.message as { content?: unknown } | null)?.content).includes(
+        text,
+      ),
+  );
+}
+
 export class LabSessions {
-  private runtime?: Promise<ModelRuntime>;
+  private catalogModels?: Promise<ModelSummary[]>;
   private readonly entries = new Map<string, Promise<Entry>>();
 
   constructor(private readonly deps: SessionDependencies) {}
 
-  modelRuntime(): Promise<ModelRuntime> {
-    const { agentDir } = this.deps.paths;
-    process.env.PI_CODING_AGENT_DIR = agentDir;
-    const modelsPath = join(agentDir, "models.json");
-    this.runtime ??= ModelRuntime.create({
-      authPath: join(agentDir, "auth.json"),
-      modelsPath: existsSync(modelsPath) ? modelsPath : null,
-      modelsStorePath: join(agentDir, "models-store.json"),
-      allowModelNetwork: true,
-      refreshOnCreate: false,
-    });
-    return this.runtime;
+  /** Claude models offered by the bundled Claude Code, read once. */
+  models(): Promise<ModelSummary[]> {
+    this.catalogModels ??= claudeModels(this.deps.paths.claudeConfigDir);
+    return this.catalogModels;
   }
 
-  async models(): Promise<ModelSummary[]> {
-    const runtime = await this.modelRuntime();
-    const available = await runtime.getAvailable();
-    return available.map((model) => ({
-      provider: model.provider,
-      id: model.id,
-      name: model.name,
-      reasoning: model.reasoning,
-      input: model.input,
-      contextWindow: model.contextWindow,
-    }));
-  }
-
-  private async resolveModel(
-    lab: Lab,
-    runtime: ModelRuntime,
-  ): Promise<Model<Api> | undefined> {
-    if (lab.provider && lab.model) {
-      const model = runtime.getModel(lab.provider, lab.model);
-      if (model) return model;
-    }
-    const available = await runtime.getAvailable();
-    return available[0];
+  private async model(selection: {
+    provider?: string | null;
+    model?: string | null;
+  }): Promise<string | undefined> {
+    if (!selection.model) return undefined;
+    const available = await this.models();
+    if (
+      selection.provider !== "anthropic" ||
+      !available.some((model) => model.id === selection.model)
+    )
+      throw badRequest(
+        `Model ${selection.provider}/${selection.model} is not available`,
+      );
+    return selection.model;
   }
 
   private open(labId: string): Promise<Entry> {
@@ -281,25 +283,22 @@ export class LabSessions {
     const entry: Entry = {
       lab,
       session,
+      savedSessionId: this.deps.labs.sessionId(lab.id),
       listeners: new Set(),
       lastError: null,
-      queue: { steering: [], followUp: [] },
       streamingText: "",
     };
     session.subscribe((event) => this.handle(entry, event));
     return entry;
   }
 
-  /** The coordinator and its workers use the same Pi setup, with separate context. */
+  /** The coordinator and its workers use the same setup, with separate context. */
   async createSession(
     lab: Lab,
     worker?: { run: AgentRun; definition: AgentDefinition },
     campaign?: Campaign,
-  ): Promise<AgentSession> {
-    const { agentDir, sessionsDir } = this.deps.paths;
-    const runtime = await this.modelRuntime();
-    const settingsManager = SettingsManager.create(lab.path, agentDir);
-    const { resources } = this.deps;
+  ): Promise<ClaudeSession> {
+    const { resources, labs } = this.deps;
     // Worker instructions and primary skill stay fixed for this spawn; lab context stays fresh.
     const definition =
       worker?.definition ??
@@ -314,127 +313,78 @@ export class LabSessions {
       : undefined;
     const systemPrompt = () =>
       workerPrompt ??
-      `${resources.systemPrompt(this.deps.labs.get(lab.id))}\n\n${resources.prompt("campaign-dispatch").content}`;
-    const loader = new DefaultResourceLoader({
-      cwd: lab.path,
-      agentDir,
-      settingsManager,
-      noExtensions: true,
-      noThemes: true,
-      noContextFiles: true,
-      noSkills: true,
-      noPromptTemplates: true,
-      additionalExtensionPaths: [webAccessExtension()],
-      extensionFactories: [
-        (pi) => {
-          pi.on("before_agent_start", (event) => {
-            // Pi owns prompt assembly; read database context on each working turn.
-            event.systemPromptOptions.appendSystemPrompt = systemPrompt();
-            event.systemPromptOptions.contextFiles =
-              loader.getAgentsFiles().agentsFiles;
-          });
-        },
-      ],
-      appendSystemPrompt: [systemPrompt()],
-    });
-    await loader.reload();
-    // Database documents are passed directly to Pi. No mirrored Markdown files or virtual file paths.
-    loader.getAgentsFiles = () => {
-      const context = this.deps.labs.context(lab.id);
-      const agentsFiles = [
-        {
-          path: `Laboratory context (database, revision ${context.revision})`,
-          content: context.content,
-        },
-      ];
+      `${resources.systemPrompt(labs.get(lab.id))}\n\n${resources.prompt("campaign-dispatch").content}`;
+    // Database documents reach the model with every prompt, as fresh context.
+    const context = () => {
+      const sections: [string, string][] = [];
+      const current = labs.context(lab.id);
+      sections.push([
+        `Laboratory context (database, revision ${current.revision})`,
+        current.content,
+      ]);
       if (primarySkill)
-        agentsFiles.push({
-          path: `Primary skill: ${primarySkill.id} (database)`,
-          content: primarySkill.instructions,
-        });
+        sections.push([
+          `Primary skill: ${primarySkill.id} (database)`,
+          primarySkill.instructions,
+        ]);
       if (campaignId)
-        agentsFiles.push({
-          path: "Campaign state (database)",
-          content: `${worker ? "Your assignment belongs to this campaign; results and jobs go to its coordinator.\n" : ""}${JSON.stringify(this.deps.campaigns.get(lab.id, campaignId))}`,
-        });
+        sections.push([
+          "Campaign state (database)",
+          `${worker ? "Your assignment belongs to this campaign; results and jobs go to its coordinator.\n" : ""}${JSON.stringify(this.deps.campaigns.get(lab.id, campaignId))}`,
+        ]);
       if (!worker || worker.definition.id === "research-editor")
-        agentsFiles.push({
-          path: "Pico editorial status (computed)",
-          content: this.deps.editorial.promptContext(lab),
-        });
-      return { agentsFiles };
+        sections.push([
+          "Pico editorial status (computed)",
+          this.deps.editorial.promptContext(lab),
+        ]);
+      return sections
+        .map(([title, content]) => `# ${title}\n\n${content}`)
+        .join("\n\n");
     };
     const selected = worker?.run ?? campaign;
-    const model = selected
-      ? (await runtime.getAvailable()).find(
-          (model) =>
-            model.provider === selected.provider && model.id === selected.model,
-        )
-      : await this.resolveModel(lab, runtime);
-    if (selected && !model)
-      throw badRequest(
-        `Model ${selected.provider}/${selected.model} is not available`,
-      );
-    const customTools = createPicoTools({
-      lab,
-      labs: this.deps.labs,
-      resources,
-      skillCatalog,
-      records: this.deps.records,
-      jobs: this.deps.jobs,
-      editorial: this.deps.editorial,
-      editorialRunId:
-        worker?.definition.id === "research-editor" ? worker.run.id : undefined,
-      subagents: worker ? undefined : this.deps.subagents,
-      catalog: worker ? undefined : this.deps.catalog,
-      campaigns: this.deps.campaigns,
-      campaignId,
-      campaignCoordinator: !!campaign,
-      author: worker
-        ? `subagent:${worker.run.id}`
-        : campaign
-          ? `campaign:${campaign.id}`
-          : "pico",
-    });
-    const { session } = await createAgentSession({
+    const model = await this.model(selected ?? lab);
+    const options: ClaudeSessionOptions = {
       cwd: lab.path,
-      agentDir,
-      modelRuntime: runtime,
       model,
       thinkingLevel: (selected?.thinking ?? lab.thinking) as ThinkingLevel,
-      tools: [
-        ...builtinTools,
-        ...customTools.map((tool) => tool.name),
-        ...webTools,
-      ],
-      customTools,
-      resourceLoader: loader,
-      sessionManager: worker
-        ? SessionManager.create(
-            lab.path,
-            join(sessionsDir, "agents", worker.run.id),
-          )
+      systemPrompt,
+      context,
+      env: claudeEnv(this.deps.paths.claudeConfigDir),
+      mcpServers: () => ({
+        pico: picoMcpServer({
+          lab,
+          labs,
+          resources,
+          skillCatalog,
+          records: this.deps.records,
+          jobs: this.deps.jobs,
+          editorial: this.deps.editorial,
+          editorialRunId:
+            worker?.definition.id === "research-editor"
+              ? worker.run.id
+              : undefined,
+          subagents: worker ? undefined : this.deps.subagents,
+          catalog: worker ? undefined : this.deps.catalog,
+          campaigns: this.deps.campaigns,
+          campaignId,
+          campaignCoordinator: !!campaign,
+          author: worker
+            ? `subagent:${worker.run.id}`
+            : campaign
+              ? `campaign:${campaign.id}`
+              : "pico",
+        }),
+      }),
+      resume: worker
+        ? null
         : campaign
-          ? campaign.sessionFile && existsSync(campaign.sessionFile)
-            ? SessionManager.open(campaign.sessionFile)
-            : SessionManager.create(
-                lab.path,
-                join(sessionsDir, "campaigns", campaign.id),
-              )
-          : SessionManager.continueRecent(lab.path, sessionsDir),
-      settingsManager,
-    });
-    await session.bindExtensions({});
-    // Continued sessions may declare an older tool loadout in their transcript.
-    // Apply this role's current catalog so newly introduced tools are available.
-    session.setActiveToolsByName([
-      ...builtinTools,
-      ...customTools.map((tool) => tool.name),
-      ...webTools,
-    ]);
-    if (campaignId)
-      this.deps.campaigns.attach(session, lab.id, campaignId, !!campaign);
-    return session;
+          ? campaign.sessionId
+          : this.deps.labs.sessionId(lab.id),
+      ...(campaignId
+        ? this.deps.campaigns.sessionOptions(lab.id, campaignId, !!campaign)
+        : {}),
+    };
+    return ClaudeSession.create(options);
   }
 
   private emit(entry: Entry, event: SessionEvent): void {
@@ -447,33 +397,41 @@ export class LabSessions {
     }
   }
 
-  private handle(entry: Entry, event: AgentSessionEvent): void {
+  private fail(entry: Entry, message: string): void {
+    entry.lastError = message;
+    this.emit(entry, { type: "error", message });
+  }
+
+  /** The laboratory resumes this conversation after a restart, including
+   *  one whose first turn was cut short. */
+  private remember(entry: Entry): void {
+    const { session, lab } = entry;
+    if (session.sessionId && session.sessionId !== entry.savedSessionId) {
+      this.deps.labs.setSessionId(lab.id, session.sessionId);
+      entry.savedSessionId = session.sessionId;
+    }
+  }
+
+  private handle(entry: Entry, event: ClaudeSessionEvent): void {
     switch (event.type) {
-      case "message_update": {
-        const update = event.assistantMessageEvent;
-        if (update.type === "text_delta") {
-          entry.streamingText += update.delta;
-          this.emit(entry, { type: "text_delta", delta: update.delta });
-        } else if (update.type === "thinking_delta")
-          this.emit(entry, { type: "thinking_delta", delta: update.delta });
+      case "text_delta":
+        entry.streamingText += event.delta;
+        this.emit(entry, event);
         break;
-      }
-      case "message_end": {
+      case "thinking_delta":
+        this.emit(entry, event);
+        break;
+      case "message_end":
         entry.streamingText = "";
-        const message = event.message;
-        if (message.role === "assistant" && message.stopReason === "error") {
-          entry.lastError =
-            message.errorMessage ?? "The model returned an error";
-          this.emit(entry, { type: "error", message: entry.lastError });
-        }
+        this.remember(entry);
+        if (event.error) this.fail(entry, event.error);
         this.emit(entry, { type: "message_end" });
         break;
-      }
       case "tool_execution_start":
         this.emit(entry, {
           type: "tool_start",
           toolCallId: event.toolCallId,
-          toolName: event.toolName,
+          toolName: displayToolName(event.toolName),
           args: event.args,
         });
         break;
@@ -481,24 +439,28 @@ export class LabSessions {
         this.emit(entry, {
           type: "tool_end",
           toolCallId: event.toolCallId,
-          toolName: event.toolName,
+          toolName: displayToolName(event.toolName),
           isError: event.isError,
         });
         break;
       case "agent_start":
+        entry.lastError = null;
         this.emit(entry, { type: "agent_start" });
         break;
       case "agent_end":
         entry.streamingText = "";
+        this.remember(entry);
+        if (event.result && !event.result.ok && !entry.lastError)
+          this.fail(entry, event.result.text || "The model returned an error");
         this.emit(entry, { type: "agent_end" });
         void commitAll(entry.lab.path, "Pico: turn finished").catch(() => {});
         break;
       case "queue_update":
-        entry.queue = {
-          steering: [...event.steering],
-          followUp: [...event.followUp],
-        };
-        this.emit(entry, { type: "queue", ...entry.queue });
+        this.emit(entry, {
+          type: "queue",
+          steering: event.steering,
+          followUp: event.followUp,
+        });
         break;
       case "compaction_start":
         this.emit(entry, { type: "compaction", phase: "start" });
@@ -506,14 +468,15 @@ export class LabSessions {
       case "compaction_end":
         this.emit(entry, { type: "compaction", phase: "end" });
         break;
-      case "auto_retry_start":
-        this.emit(entry, {
-          type: "retry",
-          attempt: event.attempt,
-          message: event.errorMessage,
-        });
+      case "retry":
+        this.emit(entry, event);
         break;
-      default:
+      case "rate_limit":
+        if (event.info.status === "rejected")
+          this.fail(entry, planLimitMessage(event.info.resetsAt));
+        break;
+      case "error":
+        this.fail(entry, event.message);
         break;
     }
   }
@@ -530,63 +493,45 @@ export class LabSessions {
       await entry.session.steer(message);
       return { mode: "steer" };
     }
-    await this.prompt(entry, message);
+    this.prompt(entry, message);
     return { mode: "prompt" };
   }
 
   /** Delivers a system-originated message such as a job outcome. While the
-   *  model is working, steering hands it the outcome before its next step
-   *  instead of holding it until the whole turn ends. */
+   *  model is working, it joins the running turn after the current tool
+   *  instead of waiting for the whole turn to end. */
   async notify(labId: string, text: string): Promise<void> {
     const entry = await this.open(labId);
     if (entry.session.isStreaming) {
       await entry.session.steer(text);
       return;
     }
-    await this.prompt(entry, text);
+    this.prompt(entry, text);
   }
 
-  /** Receipt is the outcome in Pi's history. A queued steering message stays visible
-   * in the sidebar until consumed, and can be redelivered after an interrupted turn. */
+  /** Receipt is the outcome in the session's transcript, once Claude Code has
+   *  taken it. A message sent or queued stays visible in the sidebar until
+   *  then; Claude Code keeps it across an interrupted turn, so it is never
+   *  sent twice. */
   async deliverSubagentResult(labId: string, text: string): Promise<boolean> {
     const entry = await this.open(labId);
-    const received = () =>
-      projectMessages(entry.session.messages).some(
-        (message) => message.role === "user" && message.text === text,
-      );
-    if (received()) return true;
-    if (entry.session.getSteeringMessages().includes(text)) {
-      if (entry.session.isStreaming) return false;
-      // An aborted turn can leave its steering messages queued in Pi. Remove
-      // just this durable outcome before prompting it again; retain all other input.
-      const queued = entry.session.clearQueue();
-      for (const message of queued.steering)
-        if (message !== text) await entry.session.steer(message);
-      for (const message of queued.followUp)
-        await entry.session.followUp(message);
-    }
+    const { session } = entry;
+    if (hasUserText(session.recorded, text)) return true;
+    const queue = session.queue;
+    if (
+      hasUserText(session.messages, text) ||
+      queue.steering.includes(text) ||
+      queue.followUp.includes(text)
+    )
+      return false;
     await this.notify(labId, text);
-    return received();
+    return hasUserText(session.recorded, text);
   }
 
-  private prompt(entry: Entry, text: string): Promise<void> {
+  private prompt(entry: Entry, text: string): void {
     entry.lastError = null;
-    return new Promise<void>((resolve, reject) => {
-      let accepted = false;
-      entry.session
-        .prompt(text, {
-          preflightResult: (ok) => {
-            if (ok) {
-              accepted = true;
-              resolve();
-            }
-          },
-        })
-        .catch((error: unknown) => {
-          entry.lastError = errorMessage(error);
-          this.emit(entry, { type: "error", message: entry.lastError });
-          if (!accepted) reject(error);
-        });
+    entry.session.prompt(text).catch((error: unknown) => {
+      this.fail(entry, errorMessage(error));
     });
   }
 
@@ -605,22 +550,29 @@ export class LabSessions {
     options: { before?: number; limit?: number } = {},
   ): Promise<ChatMessagePage> {
     const entry = await this.open(labId);
-    return projectMessagePage(entry.session.messages, options);
+    const page = projectMessagePage(entry.session.messages, options);
+    // Claude Code reports cost per conversation, not per message.
+    return {
+      ...page,
+      usage: { ...page.usage, cost: entry.session.usage.cost },
+    };
   }
 
   async state(labId: string): Promise<SessionState> {
     const entry = await this.open(labId);
-    const model = entry.session.model;
+    const { session } = entry;
+    const model = session.model ?? entry.lab.model;
+    const name = model
+      ? ((await this.models()).find((item) => item.id === model)?.name ?? model)
+      : null;
     return {
       labId,
-      streaming: entry.session.isStreaming,
-      model: model
-        ? { provider: model.provider, id: model.id, name: model.name }
-        : null,
-      thinking: entry.session.thinkingLevel,
-      queue: entry.queue,
+      streaming: session.isStreaming,
+      model: model && name ? { provider: "anthropic", id: model, name } : null,
+      thinking: session.thinkingLevel ?? entry.lab.thinking,
+      queue: session.queue,
       lastError: entry.lastError,
-      sessionFile: entry.session.sessionFile ?? null,
+      sessionId: session.sessionId,
       streamingText: entry.streamingText,
     };
   }
@@ -645,29 +597,25 @@ export class LabSessions {
     const pending = this.entries.get(labId);
     if (!pending) return;
     const entry = await pending;
-    const runtime = await this.modelRuntime();
-    if (selection.provider && selection.model) {
-      const model = runtime.getModel(selection.provider, selection.model);
-      if (!model)
-        throw badRequest(
-          `Model ${selection.provider}/${selection.model} is not available`,
-        );
-      await entry.session.setModel(model);
-    }
+    entry.lab = this.deps.labs.get(labId);
+    const model = await this.model(selection);
+    if (model) await entry.session.setModel(model);
     if (selection.thinking)
       entry.session.setThinkingLevel(selection.thinking as ThinkingLevel);
   }
 
   async close(): Promise<void> {
-    for (const pending of this.entries.values()) {
-      try {
-        const entry = await pending;
-        if (entry.session.isStreaming) await entry.session.abort();
-        entry.session.dispose();
-      } catch {
-        /* closing is best effort */
-      }
-    }
+    await Promise.all(
+      [...this.entries.values()].map(async (pending) => {
+        try {
+          const entry = await pending;
+          await entry.session.abort();
+          await entry.session.dispose();
+        } catch {
+          /* closing is best effort */
+        }
+      }),
+    );
     this.entries.clear();
   }
 }

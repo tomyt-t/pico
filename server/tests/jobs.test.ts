@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { openDatabase } from "../src/db";
 import {
   type Job,
@@ -44,25 +45,23 @@ test("parseMetrics accepts lists and flat objects", () => {
 });
 
 test("a metrics path written from the lab root is not doubled under the job's folder", () => {
-  const lab = "/labs/a";
-  const cwd = "/labs/a/experiments/11";
+  // Absolute folders on this system ("C:\labs\a" on Windows).
+  const lab = resolve("/labs/a");
+  const cwd = join(lab, "experiments", "11");
+  const metrics = join(cwd, "metrics.json");
   expect(resolveMetricsPath(lab, cwd, "experiments/11/metrics.json")).toBe(
-    "/labs/a/experiments/11/metrics.json",
+    metrics,
   );
   expect(resolveMetricsPath(lab, cwd, "experiments/11/runs/m.json")).toBe(
-    "/labs/a/experiments/11/runs/m.json",
+    join(cwd, "runs", "m.json"),
   );
-  expect(resolveMetricsPath(lab, cwd, "metrics.json")).toBe(
-    "/labs/a/experiments/11/metrics.json",
-  );
+  expect(resolveMetricsPath(lab, cwd, "metrics.json")).toBe(metrics);
   expect(resolveMetricsPath(lab, cwd, "out/metrics.json")).toBe(
-    "/labs/a/experiments/11/out/metrics.json",
+    join(cwd, "out", "metrics.json"),
   );
-  expect(resolveMetricsPath(lab, cwd)).toBe(
-    "/labs/a/experiments/11/metrics.json",
-  );
+  expect(resolveMetricsPath(lab, cwd)).toBe(metrics);
   expect(resolveMetricsPath(lab, lab, "experiments/11/metrics.json")).toBe(
-    "/labs/a/experiments/11/metrics.json",
+    metrics,
   );
   expect(resolveMetricsPath(lab, cwd, "/tmp/metrics.json")).toBe(
     "/tmp/metrics.json",

@@ -1,12 +1,19 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { RecordHistoryEntry } from "../src/contracts";
 import type { Job } from "../src/jobs";
 import type { Lab } from "../src/labs";
 import type { ResearchRecord } from "../src/records";
 import { createPicoTools } from "../src/tools";
-import { call, request, type Sandbox, sandbox, until } from "./support";
+import {
+  call,
+  request,
+  runTool,
+  type Sandbox,
+  sandbox,
+  until,
+} from "./support";
 
 let box: Sandbox | undefined;
 afterEach(async () => {
@@ -80,33 +87,23 @@ test("HTTP and read_records expose the same isolated history without opening a s
     jobs: app.jobs,
   }).find((tool) => tool.name === "read_records");
   if (!read) throw new Error("read_records is missing");
-  const result = await read.execute(
-    "history-call",
-    { history: true, kind: "note", limit: 1, id: foreign.id, status: "absent" },
-    undefined,
-    undefined,
-    {} as Parameters<typeof read.execute>[4],
-  );
-  const content = result.content.find((part) => part.type === "text");
-  if (content?.type !== "text") throw new Error("Missing tool text");
-  expect(JSON.parse(content.text)).toEqual(filtered);
-  const one = await read.execute(
-    "record-call",
-    { id: initial.id },
-    undefined,
-    undefined,
-    {} as Parameters<typeof read.execute>[4],
-  );
-  const recordContent = one.content.find((part) => part.type === "text");
-  if (recordContent?.type !== "text") throw new Error("Missing tool text");
-  expect(JSON.parse(recordContent.text)).toEqual(revised);
+  expect(
+    await runTool(read, {
+      history: true,
+      kind: "note",
+      limit: 1,
+      id: foreign.id,
+      status: "absent",
+    }),
+  ).toEqual(filtered);
+  expect(await runTool(read, { id: initial.id })).toEqual(revised);
 
   app.records.remove(lab.id, initial.id);
   expect(
     await call<RecordHistoryEntry[]>(app, `/labs/${lab.id}/history?kind=note`),
   ).toEqual([]);
   expect(await call(app, `/labs/${other.id}/history`)).toHaveLength(1);
-  expect(readdirSync(app.paths.sessionsDir)).toEqual([]);
+  expect(existsSync(join(app.paths.claudeConfigDir, "projects"))).toBe(false);
 });
 
 test("the HTTP API manages labs, records, files, database context and jobs", async () => {

@@ -1,9 +1,23 @@
 import { join, resolve, sep } from "node:path";
+import { verifySubscription } from "./claude-auth";
+import { picoPaths, preparePaths } from "./config";
+import { errorMessage } from "./errors";
 
 const port = Number(process.env.PICO_PORT || 4317);
 if (!Number.isInteger(port) || port < 0 || port > 65535)
   throw new Error("PICO_PORT must be an integer between 0 and 65535");
 const hostname = process.env.PICO_HOST || "127.0.0.1";
+
+// Only a Claude subscription login may run Pico's agents; never an API key.
+const paths = picoPaths();
+preparePaths(paths);
+try {
+  const account = await verifySubscription(paths.claudeConfigDir);
+  console.info(`Claude subscription: ${account.subscriptionType}`);
+} catch (error) {
+  console.error(`Pico will not start: ${errorMessage(error)}`);
+  process.exit(1);
+}
 
 const { createApp } = await import("./app");
 const app = createApp();

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { readdir, writeFile } from "node:fs/promises";
-import { basename, join, relative } from "node:path";
+import { basename, isAbsolute, join, relative, sep } from "node:path";
 import { badRequest } from "./errors";
 import { newId } from "./ids";
 import type { Lab } from "./labs";
@@ -33,6 +33,11 @@ const skipped = new Set([
   ".venv",
 ]);
 
+/** A relative path with "/" separators, so manifests and their hashes are
+ *  the same on every system. */
+const portable = (from: string, to: string): string =>
+  relative(from, to).split(sep).join("/");
+
 async function hashFile(path: string): Promise<string> {
   const hash = createHash("sha256");
   for await (const chunk of Bun.file(path).stream()) hash.update(chunk);
@@ -56,7 +61,7 @@ export async function manifestOf(root: string): Promise<ManifestEntry[]> {
       else if (item.isFile()) {
         const stat = statSync(path);
         entries.push({
-          path: relative(root, path),
+          path: portable(root, path),
           bytes: stat.size,
           sha256: await hashFile(path),
         });
@@ -106,7 +111,9 @@ export async function registerDataset(
     manifestPath,
     `${JSON.stringify({ id, name, path, sha256: manifestHash, files: manifest }, null, 2)}\n`,
   );
-  const inside = !relative(lab.path, path).startsWith("..");
+  // Another drive on Windows gives an absolute relative path, not "..".
+  const fromLab = relative(lab.path, path);
+  const inside = !fromLab.startsWith("..") && !isAbsolute(fromLab);
   return records.save(
     lab.id,
     {
@@ -115,14 +122,14 @@ export async function registerDataset(
       title: name,
       body: input.description ?? "",
       fields: {
-        path: inside ? relative(lab.path, path) : path,
+        path: inside ? portable(lab.path, path) : path,
         url: input.url ?? null,
         source: input.source ?? null,
         license: input.license ?? null,
         files: manifest.length,
         bytes: manifest.reduce((sum, entry) => sum + entry.bytes, 0),
         sha256: manifestHash,
-        manifest: relative(lab.path, manifestPath),
+        manifest: portable(lab.path, manifestPath),
       },
     },
     author,

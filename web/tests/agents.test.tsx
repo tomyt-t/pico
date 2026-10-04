@@ -73,8 +73,8 @@ const run = (patch: Partial<AgentRun>): AgentRun => ({
   thinking: "medium",
   result: "",
   error: null,
-  sessionFile: "/sessions/run-1.jsonl",
-  currentTool: "web_search",
+  sessionId: "11111111-1111-4111-8111-111111111111",
+  currentTool: "WebSearch",
   streamingText: "",
   usage: { total: 0, cost: 0 },
   notified: false,
@@ -174,7 +174,8 @@ test("the agents pane lists profiles with their models and saves only what chang
     const html = plain(<AgentsPane onClose={() => {}} />);
     expect(html).toContain("Pesquisa bibliográfica");
     expect(html).toContain("Experimentação");
-    expect(html).toContain('value="fake/fake-1" selected=""');
+    // The picker names the model, not a provider/id pair.
+    expect(html).toContain('value="fake/fake-1" selected="">Fake</option>');
     expect(html).toContain("Selecione um modelo");
     expect(html).toContain("Raciocínio");
     expect(html).toContain("todos os laboratórios");
@@ -219,7 +220,7 @@ test("the instance panel names the agent, keeps errors and outcomes and logs eac
       role: "assistant" as const,
       text: "",
       toolCalls: [
-        { id: "c1", name: "web_search", arguments: { query: "métodos" } },
+        { id: "c1", name: "WebSearch", arguments: { query: "métodos" } },
       ],
       timestamp: started + 5_000,
     },
@@ -227,7 +228,7 @@ test("the instance panel names the agent, keeps errors and outcomes and logs eac
       id: "m-3",
       role: "tool" as const,
       toolCallId: "c1",
-      toolName: "web_search",
+      toolName: "WebSearch",
       text: "3 resultados",
       timestamp: started + 65_000,
     },
@@ -258,7 +259,7 @@ test("the instance panel names the agent, keeps errors and outcomes and logs eac
   expect(html).toContain("Evidências parciais");
   expect(html).toContain("Entregando resultado ao Pico");
   expect(html).toContain("1 chamada");
-  expect(html).toContain("web_search");
+  expect(html).toContain("WebSearch");
   expect(html).toContain("Leitura realizada");
   expect(html.match(/Pesquisar métodos/g)).toHaveLength(1);
 });

@@ -337,7 +337,7 @@ export function createApi(
         );
       if (itemId && !action && method === "GET")
         return json(
-          campaigns.detail(lab.id, itemId, {
+          await campaigns.detail(lab.id, itemId, {
             ...(url.searchParams.has("before") && {
               before: Number(url.searchParams.get("before")),
             }),
@@ -387,7 +387,7 @@ export function createApi(
       }
       if (itemId && !action && method === "GET")
         return json(
-          subagents.detail(lab.id, itemId, {
+          await subagents.detail(lab.id, itemId, {
             ...(url.searchParams.has("before") && {
               before: Number(url.searchParams.get("before")),
             }),

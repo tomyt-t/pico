@@ -1,20 +1,19 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 export interface PicoPaths {
-  /** Pico's own state: database, Pi profile and sessions. */
+  /** Pico's own state: database and Claude Code profile. */
   dataDir: string;
   /** Root of the laboratory workspaces, one folder per lab. */
   labsDir: string;
-  /** Pico's private Pi profile (auth, models, settings, web search). */
-  agentDir: string;
-  sessionsDir: string;
+  /** Pico's private Claude Code config: subscription login and transcripts. */
+  claudeConfigDir: string;
   databasePath: string;
 }
 
 export type PathOverrides = Partial<
-  Pick<PicoPaths, "dataDir" | "labsDir" | "agentDir">
+  Pick<PicoPaths, "dataDir" | "labsDir" | "claudeConfigDir">
 >;
 
 export function picoPaths(overrides: PathOverrides = {}): PicoPaths {
@@ -28,32 +27,22 @@ export function picoPaths(overrides: PathOverrides = {}): PicoPaths {
       process.env.PICO_LABS_DIR ??
       join(homedir(), "pico-labs"),
   );
-  const agentDir = resolve(
-    overrides.agentDir ?? process.env.PICO_PI_AGENT_DIR ?? join(dataDir, "pi"),
+  const claudeConfigDir = resolve(
+    overrides.claudeConfigDir ??
+      process.env.PICO_CLAUDE_CONFIG_DIR ??
+      join(dataDir, "claude"),
   );
   return {
     dataDir,
     labsDir,
-    agentDir,
-    sessionsDir: join(dataDir, "sessions"),
+    claudeConfigDir,
     databasePath: join(dataDir, "pico.sqlite"),
   };
 }
-
-export const defaultWebSearch = {
-  provider: "exa",
-  maxInlineContentChars: 40_000,
-};
 
 /** Creates the directories Pico owns. Never touches laboratory workspaces. */
 export function preparePaths(paths: PicoPaths): void {
   mkdirSync(paths.dataDir, { recursive: true });
   mkdirSync(paths.labsDir, { recursive: true });
-  mkdirSync(paths.agentDir, { recursive: true, mode: 0o700 });
-  mkdirSync(paths.sessionsDir, { recursive: true });
-  const webSearch = join(paths.agentDir, "web-search.json");
-  if (!existsSync(webSearch))
-    writeFileSync(webSearch, `${JSON.stringify(defaultWebSearch, null, 2)}\n`, {
-      mode: 0o600,
-    });
+  mkdirSync(paths.claudeConfigDir, { recursive: true, mode: 0o700 });
 }

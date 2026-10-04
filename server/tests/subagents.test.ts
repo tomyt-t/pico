@@ -1,15 +1,19 @@
 import { afterEach, expect, test } from "bun:test";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApp } from "../src/app";
 import type { AgentDefinition, AgentRunDetail } from "../src/contracts";
 import {
   call,
   type FakeModel,
+  hasToolResult,
+  pico,
   request,
   type Sandbox,
   sandbox,
   startFakeModel,
+  systemText,
+  toolNames,
   until,
 } from "./support";
 
@@ -25,25 +29,21 @@ afterEach(async () => {
 const messageText = (content: unknown): string =>
   typeof content === "string" ? content : JSON.stringify(content);
 const isWorker = (req: FakeModel["requests"][number]) =>
-  req.messages.some(
-    (msg) =>
-      (msg.role === "system" || msg.role === "developer") &&
-      messageText(msg.content).includes("fresh, ephemeral session"),
-  );
+  systemText(req).includes("fresh, ephemeral session");
 const appInTest = () => {
   if (!box) throw new Error("No sandbox");
   return box.app;
 };
-const configure = (agentId = "bibliography", model = "fake-1") =>
+const configure = (agentId = "bibliography", model = "sonnet") =>
   call<AgentDefinition>(appInTest(), `/agents/${agentId}`, {
     method: "PATCH",
-    body: { provider: "fake", model, thinking: "medium" },
+    body: { provider: "anthropic", model, thinking: "medium" },
   });
 const newLab = (name = "Lab") =>
   appInTest().labs.create({
     name,
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
 const reopen = async () => {
@@ -55,23 +55,9 @@ const reopen = async () => {
   return reopened;
 };
 
-function addSecondModel() {
-  const path = join(appInTest().paths.agentDir, "models.json");
-  const config = JSON.parse(readFileSync(path, "utf8"));
-  config.providers.fake.models.push({
-    ...config.providers.fake.models[0],
-    id: "fake-2",
-    name: "Fake reasoning model",
-    reasoning: true,
-    cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 },
-  });
-  writeFileSync(path, JSON.stringify(config));
-}
-
 test("fixed catalog is global, validates model choices and preserves configuration on restart", async () => {
   fake = startFakeModel();
   box = sandbox({ fakeModelUrl: fake.url });
-  addSecondModel();
   const { app } = box;
   const profiles = await call<AgentDefinition[]>(app, "/agents");
   expect(profiles.map((agent) => agent.id)).toEqual([
@@ -98,18 +84,23 @@ test("fixed catalog is global, validates model choices and preserves configurati
       )
     ).status,
   ).toBe(404);
-  const configured = await configure("bibliography", "fake-2");
+  const configured = await configure("bibliography", "opus");
   expect(configured).toMatchObject({
-    provider: "fake",
-    model: "fake-2",
+    provider: "anthropic",
+    model: "opus",
     thinking: "medium",
+  });
+  // Models without adaptive thinking keep reasoning off.
+  expect(await configure("critical-analysis", "haiku")).toMatchObject({
+    model: "haiku",
+    thinking: "off",
   });
   expect(
     (
       await app.fetch(
         request("/agents/bibliography", {
           method: "PATCH",
-          body: { provider: "fake", model: "missing", thinking: "off" },
+          body: { provider: "anthropic", model: "missing", thinking: "off" },
         }),
       )
     ).status,
@@ -119,7 +110,7 @@ test("fixed catalog is global, validates model choices and preserves configurati
       await app.fetch(
         request("/agents/bibliography", {
           method: "PATCH",
-          body: { provider: "fake", model: "fake-1", thinking: "unknown" },
+          body: { provider: "anthropic", model: "sonnet", thinking: "unknown" },
         }),
       )
     ).status,
@@ -153,11 +144,11 @@ test("Pico spawns three instances of one profile in parallel, isolated from each
         req.messages.find((msg) => msg.role === "user")?.content,
       );
       const tag = task.match(/scope-[ABC]/)?.[0] ?? "unknown";
-      if (!req.messages.some((msg) => msg.role === "tool"))
+      if (!hasToolResult(req))
         return {
           toolCalls: [
             {
-              name: "save_record",
+              name: pico("save_record"),
               arguments: {
                 kind: "note",
                 title: tag,
@@ -165,7 +156,7 @@ test("Pico spawns three instances of one profile in parallel, isolated from each
               },
             },
             {
-              name: "bash",
+              name: "Bash",
               arguments: { command: `echo ${tag} > ${tag}.txt` },
             },
           ],
@@ -173,10 +164,10 @@ test("Pico spawns three instances of one profile in parallel, isolated from each
       await gate;
       return { text: `Report for ${tag}` };
     }
-    if (!req.messages.some((msg) => msg.role === "tool"))
+    if (!hasToolResult(req))
       return {
         toolCalls: ["A", "B", "C"].map((tag) => ({
-          name: "run_subagent",
+          name: pico("run_subagent"),
           arguments: {
             agent_id: "bibliography",
             task: `Research scope-${tag}`,
@@ -186,7 +177,6 @@ test("Pico spawns three instances of one profile in parallel, isolated from each
     return { text: "Pico has integrated the available reports." };
   });
   box = sandbox({ fakeModelUrl: fake.url });
-  addSecondModel();
   const { app } = box;
   await configure();
   const lab = await newLab();
@@ -201,8 +191,13 @@ test("Pico spawns three instances of one profile in parallel, isolated from each
     const runs = app.subagents.list(lab.id, true);
     expect(runs).toHaveLength(3);
     expect(runs.every((run) => run.status === "running")).toBe(true);
-    expect(new Set(runs.map((run) => run.sessionFile)).size).toBe(3);
-    expect(runs.every((run) => run.sessionFile !== null)).toBe(true);
+    await until(() =>
+      app.subagents.list(lab.id, true).every((run) => run.sessionId !== null),
+    );
+    expect(
+      new Set(app.subagents.list(lab.id, true).map((run) => run.sessionId))
+        .size,
+    ).toBe(3);
     expect(app.subagents.list(other.id)).toEqual([]);
     expect(
       (await app.fetch(request(`/labs/${other.id}/agent-runs/${runs[0]?.id}`)))
@@ -218,17 +213,15 @@ test("Pico spawns three instances of one profile in parallel, isolated from each
       ).status,
     ).toBe(404);
     for (const req of workers) {
-      expect(req.model).toBe("fake-1");
+      expect(req.model).toContain("sonnet");
       const text = JSON.stringify(req.messages);
       expect(text).not.toContain("Delegate three independent searches");
       expect(new Set(text.match(/scope-[ABC]/g)).size).toBe(1);
-      expect(
-        req.tools?.some((tool) => tool.function.name === "run_subagent"),
-      ).toBe(false);
+      expect(toolNames(req)).not.toContain(pico("run_subagent"));
     }
-    await configure("bibliography", "fake-2");
+    await configure("bibliography", "opus");
     expect(
-      app.subagents.list(lab.id).every((run) => run.model === "fake-1"),
+      app.subagents.list(lab.id).every((run) => run.model === "sonnet"),
     ).toBe(true);
     for (const run of runs) {
       const tag = run.task.split(" ").at(-1);
@@ -265,7 +258,7 @@ test("Pico spawns three instances of one profile in parallel, isolated from each
       ).toHaveLength(1);
     const next = app.subagents.start(lab, "bibliography", "Research scope-A");
     await until(() => app.subagents.get(lab.id, next.id).notified, 20_000);
-    expect(app.subagents.get(lab.id, next.id).model).toBe("fake-2");
+    expect(app.subagents.get(lab.id, next.id).model).toBe("opus");
     expect(app.subagents.get(lab.id, next.id).usage.cost).toBeGreaterThan(0);
     expect(
       workers.at(-2)?.messages.filter((msg) => msg.role === "user"),
@@ -290,7 +283,8 @@ test("Pico spawns three instances of one profile in parallel, isolated from each
       expect(restarted.subagents.list(lab.id)).toHaveLength(4);
       expect(restarted.subagents.list(lab.id, true)).toHaveLength(0);
       expect(
-        restarted.subagents.detail(lab.id, next.id).messages.at(-1)?.text,
+        (await restarted.subagents.detail(lab.id, next.id)).messages.at(-1)
+          ?.text,
       ).toContain("Report for scope-A");
     } finally {
       await restarted.close();
@@ -350,7 +344,7 @@ test("stopping, model failure and server shutdown have distinct durable outcomes
   fake = startFakeModel((req) => {
     if (!isWorker(req)) return { text: "Outcome received" };
     return {
-      toolCalls: [{ name: "bash", arguments: { command: "sleep 30" } }],
+      toolCalls: [{ name: "Bash", arguments: { command: "sleep 8" } }],
     };
   });
   box = sandbox({ fakeModelUrl: fake.url });
@@ -372,7 +366,7 @@ test("stopping, model failure and server shutdown have distinct durable outcomes
     "Work until interrupted",
   );
   await until(
-    () => app.subagents.get(lab.id, stopped.id).currentTool === "bash",
+    () => app.subagents.get(lab.id, stopped.id).currentTool === "Bash",
     20_000,
   );
   await app.subagents.stop(lab.id, stopped.id);
@@ -380,7 +374,7 @@ test("stopping, model failure and server shutdown have distinct durable outcomes
   await until(() => app.subagents.get(lab.id, stopped.id).notified, 20_000);
   const interrupted = app.subagents.start(lab, "bibliography", "Shutdown work");
   await until(
-    () => app.subagents.get(lab.id, interrupted.id).currentTool === "bash",
+    () => app.subagents.get(lab.id, interrupted.id).currentTool === "Bash",
     20_000,
   );
   const restarted = await reopen();

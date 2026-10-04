@@ -6,10 +6,14 @@ import type { EditorialStatus } from "../src/contracts";
 import {
   call,
   type FakeModel,
+  pico,
   request,
+  requestText,
   type Sandbox,
   sandbox,
   startFakeModel,
+  systemText,
+  toolNames,
   until,
 } from "./support";
 
@@ -21,14 +25,8 @@ afterEach(async () => {
   box = undefined;
   fake = undefined;
 });
-const text = (value: unknown) =>
-  typeof value === "string" ? value : JSON.stringify(value);
 const worker = (req: FakeModel["requests"][number]) =>
-  req.messages.some(
-    (message) =>
-      (message.role === "system" || message.role === "developer") &&
-      text(message.content).includes("fresh, ephemeral session"),
-  );
+  systemText(req).includes("fresh, ephemeral session");
 
 test("Pico delegates an editorial pass, verifies saved pages and keeps concurrent research pending", async () => {
   let release!: () => void;
@@ -46,7 +44,7 @@ test("Pico delegates an editorial pass, verifies saved pages and keeps concurren
         return {
           toolCalls: [
             {
-              name: "run_subagent",
+              name: pico("run_subagent"),
               arguments: {
                 agent_id: "research-editor",
                 task: "Review the Panorama and register actual coverage; preserve the existing page.",
@@ -58,17 +56,17 @@ test("Pico delegates an editorial pass, verifies saved pages and keeps concurren
     }
     const step = editorCalls++;
     if (step === 0)
-      return { toolCalls: [{ name: "review_pages", arguments: {} }] };
+      return { toolCalls: [{ name: pico("review_pages"), arguments: {} }] };
     if (step === 1)
       return {
-        toolCalls: [{ name: "read_records", arguments: { id: pageId } }],
+        toolCalls: [{ name: pico("read_records"), arguments: { id: pageId } }],
       };
     if (step === 2 && !secondPass) {
       await gate;
       return {
         toolCalls: [
           {
-            name: "save_record",
+            name: pico("save_record"),
             arguments: {
               id: pageId,
               kind: "page",
@@ -97,7 +95,7 @@ test("Pico delegates an editorial pass, verifies saved pages and keeps concurren
       return {
         toolCalls: [
           {
-            name: "review_pages",
+            name: pico("review_pages"),
             arguments: {
               pages: [
                 {
@@ -120,14 +118,14 @@ test("Pico delegates an editorial pass, verifies saved pages and keeps concurren
   const { app } = box;
   const lab = await app.labs.create({
     name: "Editorial lab",
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
   labId = lab.id;
   await app.catalog.configure("research-editor", {
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
   const source = app.records.save(
@@ -236,7 +234,7 @@ test("an interrupted editor preserves a partial review across restart without au
       return {
         toolCalls: [
           {
-            name: "review_pages",
+            name: pico("review_pages"),
             arguments: {
               pages: [
                 {
@@ -256,13 +254,13 @@ test("an interrupted editor preserves a partial review across restart without au
   const { app } = box;
   const lab = await app.labs.create({
     name: "Partial",
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
   await app.catalog.configure("research-editor", {
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
   const topic = app.records.save(
@@ -326,13 +324,13 @@ test("an aborted coordinator receives a queued outcome once and preserves other 
   const { app } = box;
   const lab = await app.labs.create({
     name: "Delivery",
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
   await app.catalog.configure("bibliography", {
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
   try {
@@ -359,11 +357,12 @@ test("an aborted coordinator receives a queued outcome once and preserves other 
           message.role === "user" && message.text.includes("Evidence returned"),
       ),
     ).toHaveLength(1);
+    // Claude Code may join queued messages into one user message.
     expect(
       messages.filter(
         (message) =>
           message.role === "user" &&
-          message.text === "Preserve this researcher instruction",
+          message.text.includes("Preserve this researcher instruction"),
       ),
     ).toHaveLength(1);
   } finally {
@@ -371,25 +370,22 @@ test("an aborted coordinator receives a queued outcome once and preserves other 
   }
 }, 35000);
 
-test("continued coordinator sessions receive new tools and fresh editorial context on later turns", async () => {
+test("resumed coordinator sessions get current tools and fresh editorial context on later turns", async () => {
   fake = startFakeModel(() => ({ text: "Acknowledged" }));
   box = sandbox({ fakeModelUrl: fake.url });
   const { app } = box;
   const lab = await app.labs.create({
     name: "Continued",
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
-  // Persist the older role loadout as a real Pi transcript.
+  // An earlier conversation, persisted by Claude Code and resumed by the lab.
   const old = await app.sessions.createSession(lab);
-  old.setActiveToolsByName(
-    old.getActiveToolNames().filter((name) => name !== "review_pages"),
-  );
-  await old.prompt("An earlier version of Pico", {
-    expandPromptTemplates: false,
-  });
-  old.dispose();
+  await old.prompt("An earlier version of Pico");
+  await old.dispose();
+  if (!old.sessionId) throw new Error("The earlier session was not saved");
+  app.labs.setSessionId(lab.id, old.sessionId);
   app.records.save(
     lab.id,
     { kind: "page", title: "Needs editorial review", body: "Original content" },
@@ -398,10 +394,9 @@ test("continued coordinator sessions receive new tools and fresh editorial conte
   await app.sessions.send(lab.id, "Resume our work");
   await until(async () => !(await app.sessions.state(lab.id)).streaming);
   const resumed = fake.requests.at(-1);
-  expect(
-    resumed?.tools?.some((tool) => tool.function.name === "review_pages"),
-  ).toBe(true);
-  expect(JSON.stringify(resumed)).toContain("1 pages need review");
+  expect(toolNames(resumed)).toContain(pico("review_pages"));
+  expect(requestText(resumed)).toContain("An earlier version of Pico");
+  expect(requestText(resumed)).toContain("1 pages need review");
   app.records.save(
     lab.id,
     { kind: "page", title: "Another page", body: "New content" },
@@ -414,7 +409,7 @@ test("continued coordinator sessions receive new tools and fresh editorial conte
   );
   await app.sessions.send(lab.id, "Continue with the new direction");
   await until(async () => !(await app.sessions.state(lab.id)).streaming);
-  const current = JSON.stringify(fake.requests.at(-1));
+  const current = requestText(fake.requests.at(-1));
   expect(current).toContain("2 pages need review");
   expect(current).toContain("A newly adopted research direction");
 }, 20000);

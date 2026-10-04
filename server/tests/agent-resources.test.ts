@@ -13,10 +13,15 @@ import { createPicoTools } from "../src/tools";
 import {
   call,
   type FakeModel,
+  pico,
   request,
+  requestText,
+  runTool,
   type Sandbox,
   sandbox,
   startFakeModel,
+  systemText,
+  toolNames,
   until,
 } from "./support";
 
@@ -170,20 +175,11 @@ test("lab_context and save_page tools share HTTP data, revisions and authorship 
     jobs: app.jobs,
     author: "subagent:test",
   });
-  const execute = async (name: string, params: Record<string, unknown>) => {
-    const tool = tools.find((item) => item.name === name);
-    if (!tool) throw new Error(`Missing ${name}`);
-    const result = await tool.execute(
-      "call",
+  const execute = (name: string, params: Record<string, unknown>) =>
+    runTool(
+      tools.find((item) => item.name === name),
       params,
-      undefined,
-      undefined,
-      {} as Parameters<typeof tool.execute>[4],
     );
-    const part = result.content.find((item) => item.type === "text");
-    if (part?.type !== "text") throw new Error("Missing result");
-    return JSON.parse(part.text);
-  };
   await execute("lab_context", {
     content: "# Current direction\nCompare the revised protocol.",
   });
@@ -234,14 +230,10 @@ test("lab_context and save_page tools share HTTP data, revisions and authorship 
   ]);
 });
 
-test("real Pi worker sessions load database skills, fetch examples on demand and keep active instructions stable", async () => {
+test("real Claude Code worker sessions load database skills, fetch examples on demand and keep active instructions stable", async () => {
   let step = 0;
   fake = startFakeModel((req) => {
-    const worker = req.messages.some(
-      (msg) =>
-        (msg.role === "system" || msg.role === "developer") &&
-        JSON.stringify(msg.content).includes("fresh, ephemeral session"),
-    );
+    const worker = systemText(req).includes("fresh, ephemeral session");
     if (!worker) return { text: "Received" };
     if (!box) throw new Error("Missing sandbox");
     const { app } = box;
@@ -253,7 +245,7 @@ test("real Pi worker sessions load database skills, fetch examples on demand and
       return {
         toolCalls: [
           {
-            name: "read_skill",
+            name: pico("read_skill"),
             arguments: { id: "research-editorial", examples: true },
           },
         ],
@@ -263,7 +255,7 @@ test("real Pi worker sessions load database skills, fetch examples on demand and
       return {
         toolCalls: [
           {
-            name: "save_page",
+            name: pico("save_page"),
             arguments: {
               title: "Explained result",
               placement: "panorama",
@@ -283,7 +275,7 @@ test("real Pi worker sessions load database skills, fetch examples on demand and
       return {
         toolCalls: [
           {
-            name: "review_pages",
+            name: pico("review_pages"),
             arguments: {
               pages: [
                 {
@@ -309,8 +301,8 @@ test("real Pi worker sessions load database skills, fetch examples on demand and
     (
       await app.labs.create({
         name: "Worker",
-        provider: "fake",
-        model: "fake-1",
+        provider: "anthropic",
+        model: "sonnet",
         thinking: "off",
       })
     ).id,
@@ -320,7 +312,7 @@ test("real Pi worker sessions load database skills, fetch examples on demand and
   const lab = app.labs.get("worker");
   await call<AgentDefinition>(app, "/agents/research-editor", {
     method: "PATCH",
-    body: { provider: "fake", model: "fake-1", thinking: "off" },
+    body: { provider: "anthropic", model: "sonnet", thinking: "off" },
   });
   const first = app.subagents.start(
     lab,
@@ -331,14 +323,12 @@ test("real Pi worker sessions load database skills, fetch examples on demand and
   expect(app.subagents.get(lab.id, first.id).status).toBe("completed");
   expect(app.editorial.status(lab).needsReview).toBe(false);
   const workerRequests = fake.requests.filter((req) =>
-    JSON.stringify(req.messages[0]).includes("fresh, ephemeral session"),
+    systemText(req).includes("fresh, ephemeral session"),
   );
-  expect(JSON.stringify(workerRequests[0])).toContain("CURRENT_RUN_PROCEDURE");
-  expect(JSON.stringify(workerRequests[0])).toContain("DATABASE_DIRECTION");
-  expect(JSON.stringify(workerRequests[0])).not.toContain(
-    "CURRENT_RUN_EXAMPLE",
-  );
-  expect(JSON.stringify(workerRequests[1])).toContain("CURRENT_RUN_EXAMPLE");
+  expect(requestText(workerRequests[0])).toContain("CURRENT_RUN_PROCEDURE");
+  expect(requestText(workerRequests[0])).toContain("DATABASE_DIRECTION");
+  expect(requestText(workerRequests[0])).not.toContain("CURRENT_RUN_EXAMPLE");
+  expect(requestText(workerRequests[1])).toContain("CURRENT_RUN_EXAMPLE");
   expect(JSON.stringify(workerRequests)).not.toContain("NEXT_RUN_PROCEDURE");
   expect(JSON.stringify(workerRequests)).not.toContain("NEXT_RUN_EXAMPLE");
   const second = app.subagents.start(
@@ -349,7 +339,7 @@ test("real Pi worker sessions load database skills, fetch examples on demand and
   await until(() => app.subagents.get(lab.id, second.id).notified, 15000);
   expect(
     fake.requests.some((req) =>
-      JSON.stringify(req.messages[0]).includes("NEXT_RUN_PROCEDURE"),
+      requestText(req).includes("NEXT_RUN_PROCEDURE"),
     ),
   ).toBe(true);
   expect(existsSync(join(lab.path, "PICO.md"))).toBe(false);
@@ -361,8 +351,8 @@ test("database prompt and context edits reach an existing coordinator on its nex
   const { app } = box;
   const lab = await app.labs.create({
     name: "Coordinator",
-    provider: "fake",
-    model: "fake-1",
+    provider: "anthropic",
+    model: "sonnet",
     thinking: "off",
   });
   await app.sessions.send(lab.id, "Start");
@@ -375,11 +365,48 @@ test("database prompt and context edits reach an existing coordinator on its nex
   writeFileSync(join(lab.path, "PICO.md"), "OBSOLETE_FILE_CONTEXT");
   await app.sessions.send(lab.id, "Continue");
   await until(async () => !(await app.sessions.state(lab.id)).streaming);
-  const system = JSON.stringify(fake.requests.at(-1)?.messages[0]);
-  expect(system).toContain("UPDATED_COORDINATOR for Coordinator");
-  expect(system).toContain("UPDATED_CONTEXT");
-  expect(system).not.toContain("OBSOLETE_FILE_CONTEXT");
-  expect(
-    fake.requests.at(-1)?.tools?.map((tool) => tool.function.name),
-  ).toEqual(expect.arrayContaining(["save_page", "read_skill", "lab_context"]));
+  const last = fake.requests.at(-1);
+  expect(systemText(last)).toContain("UPDATED_COORDINATOR for Coordinator");
+  expect(requestText(last)).toContain("UPDATED_CONTEXT");
+  expect(requestText(last)).not.toContain("OBSOLETE_FILE_CONTEXT");
+  expect(toolNames(last)).toEqual(
+    expect.arrayContaining([
+      pico("save_page"),
+      pico("read_skill"),
+      pico("lab_context"),
+    ]),
+  );
+});
+
+test("factory prompts naming Pi's tools are upgraded, while edited ones stay", async () => {
+  box = sandbox();
+  const { app } = box;
+  const paths = app.paths;
+  const legacyShared = app.resources
+    .prompt("shared")
+    .content.replaceAll("mcp__pico__", "")
+    .replace("- Bash is for quick", "- bash is for quick")
+    .replace(
+      "WebSearch finds sources and WebFetch reads a page.",
+      "web_search, fetch_content and get_search_content read the web.",
+    );
+  app.db.run("UPDATE prompt_templates SET content=? WHERE id='shared'", [
+    legacyShared,
+  ]);
+  app.db.run("UPDATE prompt_templates SET content=? WHERE id='worker'", [
+    "My own worker prompt with save_record",
+  ]);
+  await app.close();
+  const reopened = createApp(paths);
+  try {
+    expect(reopened.resources.prompt("shared").content).toContain(
+      "mcp__pico__save_record",
+    );
+    expect(reopened.resources.prompt("shared").content).toContain("WebFetch");
+    expect(reopened.resources.prompt("worker").content).toBe(
+      "My own worker prompt with save_record",
+    );
+  } finally {
+    await reopened.close();
+  }
 });

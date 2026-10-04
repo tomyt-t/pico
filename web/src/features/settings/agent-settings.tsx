@@ -111,7 +111,7 @@ export function AgentRow({
               key={`${entry.provider}/${entry.id}`}
               value={`${entry.provider}/${entry.id}`}
             >
-              {entry.provider} / {entry.id}
+              {entry.name}
             </option>
           ))}
         </select>

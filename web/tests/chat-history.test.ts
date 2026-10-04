@@ -25,7 +25,7 @@ const view = (start: number, end: number, labId = "a"): ChatView => ({
     thinking: "off",
     queue: { steering: [], followUp: [] },
     lastError: null,
-    sessionFile: null,
+    sessionId: null,
     streamingText: "",
   },
 });

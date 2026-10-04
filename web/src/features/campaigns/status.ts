@@ -1,5 +1,5 @@
 import type { AgentRun, Campaign } from "@pico/server/contracts";
-import { toolLabel } from "@/web/components/format";
+import { shortTimestamp, toolLabel } from "@/web/components/format";
 import { i18n } from "@/web/components/i18n";
 
 /** The visual state of a campaign or instance: a colour and a shape, never the accent alone. */
@@ -53,6 +53,10 @@ export function campaignStateLine(campaign: Campaign, workers = 0): string {
     case "paused":
       return t(`campaigns.reasons.${campaign.reason ?? "researcher"}`);
     case "pending":
+      if (campaign.reason === "rate_limit" && campaign.limitResetsAt)
+        return t("campaigns.planLimitUntil", {
+          time: shortTimestamp(campaign.limitResetsAt),
+        });
       return t(`campaigns.reasons.${campaign.reason ?? "input"}`);
     case "waiting":
       return campaign.reason

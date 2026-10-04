@@ -48,11 +48,12 @@ export const en: Dictionary = {
     coordinatorWorking: "Coordinator working",
     coordinatorTool: "Coordinator {{tool}}",
     coordinatorIdle: "Coordinator between turns",
+    planLimitUntil: "Claude plan limit until {{time}}",
     startedAgo: "started {{time}}",
     updatedAgo: "updated {{time}}",
     delivering: "Delivering to the campaign coordinator",
-    budget: "Budget per campaign",
-    budgetTitle: "Budget",
+    budget: "Estimated consumption limit per campaign",
+    budgetTitle: "Estimated consumption",
     maxAgents: "Specialists per campaign",
     labMaxAgents: "Specialists in the laboratory",
     estimated: "Estimated usage",
@@ -60,14 +61,15 @@ export const en: Dictionary = {
     percent: "{{percent}}%",
     limitLine: "{{count}} specialists per campaign",
     budgetHint:
-      "Includes coordinator and specialists. In-flight calls may exceed the limit; external job costs are excluded. Models without configured prices cannot provide a spending estimate.",
+      "Consumption estimated at API prices, for coordinator and specialists. On a Claude subscription it is not a charge: the real limit is your plan's, and when it is reached the campaign waits for the reset. In-flight calls may exceed the limit; external jobs are excluded.",
     settingsHint:
       "Defaults copied into each new campaign. Changing them does not alter campaigns in progress.",
-    budgetFieldHint: "Estimated from model prices. External jobs do not count.",
+    budgetFieldHint:
+      "A consumption measure at API prices, not a charge. External jobs do not count.",
     maxAgentsHint: "Includes the coordinator.",
     labMaxAgentsHint: "Shared with Pico's agents.",
     coordinatorModelHint:
-      "The coordinator model lives under Agents, in the Campaign Coordinator profile. When the budget or the limit is reached, the campaign waits for your decision.",
+      "The coordinator model lives under Agents, in the Campaign Coordinator profile. When the estimated consumption, the capacity or the Claude plan limit is reached, the campaign waits for your decision. Few parallel specialists spare the subscription limits.",
     controls: "Controls",
     pause: "Pause",
     pausing: "Pausing…",
@@ -80,10 +82,10 @@ export const en: Dictionary = {
     keepJobs: "Keep jobs running",
     stopJobs: "Stop jobs",
     endConfirm: "End and preserve results",
-    addBudget: "Additional budget (US$)",
+    addBudget: "Raise estimated consumption (US$)",
     direction: "Direction for resumption",
     resumeHint:
-      "Additional budget increases the total; the campaign resumes its own conversation.",
+      "The additional amount raises the limit; the campaign resumes its own conversation.",
     message: "Message the coordinator",
     messageHint:
       "Added to the campaign context and read on its next turn. It does not resume a paused campaign.",
@@ -101,13 +103,14 @@ export const en: Dictionary = {
       ended: "Ended",
     },
     reasons: {
-      budget: "Budget reached",
+      budget: "Estimated consumption reached",
       capacity: "Waiting for capacity",
       results: "Waiting for results",
       pico: "Waiting for Pico",
       input: "Waiting for your direction",
       error: "Needs attention",
       researcher: "Your decision",
+      rate_limit: "Claude plan limit",
     },
   },
   common: {
@@ -165,16 +168,14 @@ export const en: Dictionary = {
     start_campaign: "starting a campaign",
     list_campaigns: "checking campaigns",
     message_campaign: "guiding a campaign",
-    web_search: "searching the web",
-    fetch_content: "reading a source",
-    get_search_content: "reading a search result",
-    read: "reading a file",
-    write: "writing a file",
-    edit: "editing a file",
-    bash: "running a command",
-    grep: "searching content",
-    find: "finding files",
-    ls: "listing a folder",
+    WebSearch: "searching the web",
+    WebFetch: "reading a source",
+    Read: "reading a file",
+    Write: "writing a file",
+    Edit: "editing a file",
+    Bash: "running a command",
+    Grep: "searching content",
+    Glob: "finding files",
   },
   http: {
     status: "The server returned HTTP {{status}}.",
@@ -509,7 +510,7 @@ export const en: Dictionary = {
     globalHint:
       "Global configuration for all laboratories. Changes apply to future runs.",
     paneHint:
-      "Model and reasoning level for each profile. Select a profile to edit its instructions.",
+      "Claude model and reasoning level for each profile. Suggestion: Sonnet for specialists and Opus only for Pico and the campaign coordinator. Select a profile to edit its instructions.",
     profile: "Profile",
     unsaved: "Unsaved changes in {{names}}",
     discard: "Discard",
@@ -521,7 +522,7 @@ export const en: Dictionary = {
     chooseModel: "Select a model",
     unavailable: "Unavailable",
     noModels:
-      "No models available. Configure a provider in the Pi profile to choose agent models.",
+      "No Claude model available. Run bun run login to sign in with your subscription.",
     saved: "Configuration saved for future runs.",
     states: {
       running: "Working",
@@ -651,11 +652,11 @@ export const en: Dictionary = {
     error: "Error: {{message}}",
     compaction: "Context compacted",
     compacting: "Compacting context…",
-    retrying: "Attempt {{attempt}} after a provider error: {{message}}",
+    retrying: "Attempt {{attempt}} after a Claude API error: {{message}}",
     usage: "{{tokens}} tokens · {{cost}}",
     model: "Model: {{model}}",
     noModel:
-      "No model available. Run bun run pi, use /login and pick the model in the laboratory settings.",
+      "No model available. Run bun run login to sign in with your Claude subscription and pick the model in the laboratory settings.",
     jumpToLatest: "Jump to the latest message",
     modelLabel: "Model",
     thinkingLabel: "Thinking",
@@ -845,9 +846,10 @@ export const en: Dictionary = {
     researchLineHint:
       "Optional. It usually emerges in the conversation with Pico and lives in the laboratory context.",
     model: "Model",
-    modelHint: "Models authenticated in Pico's Pi profile.",
-    defaultModel: "Use the first available model",
-    noModels: "No authenticated model. Run bun run pi and use /login.",
+    modelHint:
+      "Claude models of your subscription (sign in with bun run login).",
+    defaultModel: "Use Claude Code's default model",
+    noModels: "No model available. Run bun run login.",
     thinking: "Thinking",
     thinkingLevels: {
       off: "Off",

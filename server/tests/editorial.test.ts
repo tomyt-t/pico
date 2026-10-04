@@ -239,14 +239,27 @@ test("file edits, invalid blocks and unavailable references remain visible even 
   });
   expect(records.get(lab.id, panorama.id).body).toBe("Readable explanation");
   // An external symlink is not silently attested as a laboratory artifact.
-  symlinkSync("/etc/hosts", join(lab.path, "external"));
-  const outside = page("External", {
-    blocks: [{ type: "artifact", path: "external" }],
-  });
-  expect(
-    editorial.status(lab).pages.find((item) => item.pageId === outside.id)
-      ?.missingFiles,
-  ).toEqual(["external"]);
+  const elsewhere = mkdtempSync(join(tmpdir(), "pico-elsewhere-"));
+  try {
+    writeFileSync(join(elsewhere, "hosts"), "outside the laboratory");
+    try {
+      symlinkSync(join(elsewhere, "hosts"), join(lab.path, "external"));
+    } catch (error) {
+      // Windows creates symlinks only for administrators or in Developer
+      // Mode; without one there is no external link to attest.
+      if ((error as { code?: string }).code === "EPERM") return;
+      throw error;
+    }
+    const outside = page("External", {
+      blocks: [{ type: "artifact", path: "external" }],
+    });
+    expect(
+      editorial.status(lab).pages.find((item) => item.pageId === outside.id)
+        ?.missingFiles,
+    ).toEqual(["external"]);
+  } finally {
+    rmSync(elsewhere, { recursive: true, force: true });
+  }
 });
 
 test("form warnings name what keeps a page from reading well, without touching its science", () => {

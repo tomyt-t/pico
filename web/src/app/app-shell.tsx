@@ -87,9 +87,9 @@ export function AppShell({
   const drawer = useRef<HTMLDialogElement>(null);
   const desktopIdentity = useRef<HTMLButtonElement>(null);
   const model = session?.model
-    ? `${session.model.provider}/${session.model.id}`
+    ? session.model.name
     : lab?.model
-      ? `${lab.provider ?? ""}/${lab.model}`
+      ? lab.model
       : t("shell.defaultModel");
   const labName = lab?.name ?? t("shell.noLaboratory");
   const sessionLabel = t(

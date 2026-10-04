@@ -239,7 +239,8 @@ export interface AgentRun {
   thinking: string;
   result: string;
   error: string | null;
-  sessionFile: string | null;
+  /** Claude Code session of this run, readable after it ends. */
+  sessionId: string | null;
   currentTool: string | null;
   streamingText: string;
   usage: { total: number; cost: number };
@@ -289,14 +290,19 @@ export interface Campaign extends CreateCampaignInput {
     | "input"
     | "error"
     | "researcher"
+    | "rate_limit"
     | null;
+  /** Limit on estimated consumption at API prices; a plan is not charged per use. */
   budgetUsd: number;
   maxAgents: number;
   usage: { total: number; cost: number };
   provider: string;
   model: string;
   thinking: string;
-  sessionFile: string | null;
+  /** The coordinator's persistent Claude Code session. */
+  sessionId: string | null;
+  /** When the Claude plan limit that stopped the campaign resets, if known. */
+  limitResetsAt: string | null;
   currentTool: string | null;
   isWorking: boolean;
   createdAt: string;
@@ -374,7 +380,7 @@ export interface SessionState {
   thinking: string;
   queue: { steering: string[]; followUp: string[] };
   lastError: string | null;
-  sessionFile: string | null;
+  sessionId: string | null;
   streamingText: string;
 }
 

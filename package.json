@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "bun server/src/dev.ts",
     "start": "bun server/src/main.ts",
-    "pi": "bun server/src/pi.ts",
+    "login": "bun server/src/login.ts",
     "build": "bun run --cwd web build",
     "test": "bun test server web",
     "typecheck": "bun x --no-install tsc -p server/tsconfig.json && bun x --no-install tsc -p web/tsconfig.json && bun x --no-install tsc -p web/tests/tsconfig.json",

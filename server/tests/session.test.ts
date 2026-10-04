@@ -6,9 +6,13 @@ import type { SessionState, UiMessage } from "../src/sessions";
 import {
   call,
   type FakeModel,
+  pico,
+  requestText,
   type Sandbox,
   sandbox,
   startFakeModel,
+  systemText,
+  toolNames,
   until,
 } from "./support";
 
@@ -23,7 +27,7 @@ afterEach(async () => {
 
 const idle = (state: SessionState) => !state.streaming;
 
-test("a real Pi session records research, receives a job outcome and revises a Panorama with a fake model", async () => {
+test("a real Claude Code session records research, receives a job outcome and revises a Panorama with a fake model", async () => {
   fake = startFakeModel();
   box = sandbox({ fakeModelUrl: fake.url, pollMs: 100 });
   const { app } = box;
@@ -31,8 +35,8 @@ test("a real Pi session records research, receives a job outcome and revises a P
     body: {
       name: "Futebol",
       researchLine: "Modelos de previsão",
-      provider: "fake",
-      model: "fake-1",
+      provider: "anthropic",
+      model: "sonnet",
       thinking: "off",
     },
   });
@@ -41,7 +45,7 @@ test("a real Pi session records research, receives a job outcome and revises a P
     {
       toolCalls: [
         {
-          name: "save_record",
+          name: pico("save_record"),
           arguments: {
             kind: "question",
             title: "Elo prevê resultados?",
@@ -71,7 +75,8 @@ test("a real Pi session records research, receives a job outcome and revises a P
     app,
     `/labs/${lab.id}/chat`,
   );
-  expect(chat.state.model).toMatchObject({ provider: "fake", id: "fake-1" });
+  expect(chat.state.model).toMatchObject({ provider: "anthropic" });
+  expect(chat.state.sessionId).toBeTruthy();
   expect(
     chat.messages.some(
       (message) =>
@@ -88,36 +93,36 @@ test("a real Pi session records research, receives a job outcome and revises a P
     role: "assistant",
     text: "Registrei a pergunta.",
   });
+  expect(app.labs.sessionId(lab.id)).toBe(chat.state.sessionId);
 
   const first = fake.requests[0];
   if (!first) throw new Error("model was not called");
-  const toolNames = (first.tools ?? []).map((tool) => tool.function.name);
+  expect(first.model).toContain("sonnet");
   for (const name of [
-    "bash",
-    "read",
-    "write",
-    "edit",
-    "save_record",
-    "run_job",
-    "web_search",
-    "fetch_content",
+    "Bash",
+    "Read",
+    "Write",
+    "Edit",
+    "Grep",
+    "Glob",
+    "WebSearch",
+    "WebFetch",
+    pico("save_record"),
+    pico("run_job"),
   ])
-    expect(toolNames).toContain(name);
-  const system = first.messages.find(
-    (message) => message.role === "system" || message.role === "developer",
-  );
-  const systemText =
-    typeof system?.content === "string"
-      ? system.content
-      : JSON.stringify(system?.content);
-  expect(systemText).toContain("You are Pico");
-  expect(systemText).toContain("Modelos de previsão");
+    expect(toolNames(first)).toContain(name);
+  for (const name of ["Task", "Agent", "TodoWrite"])
+    expect(toolNames(first)).not.toContain(name);
+  expect(systemText(first)).toContain("You are Pico");
+  expect(systemText(first)).toContain("Pages and Panorama");
+  // Laboratory context is fresh per prompt, so it travels with the messages.
+  expect(requestText(first)).toContain("Modelos de previsão");
 
   fake.script.push(
     {
       toolCalls: [
         {
-          name: "run_job",
+          name: pico("run_job"),
           arguments: {
             command:
               'printf \'[{"name":"logloss","value":0.61}]\' > metrics.json && echo trained',
@@ -133,15 +138,11 @@ test("a real Pi session records research, receives a job outcome and revises a P
     body: { message: "Treine o baseline" },
   });
   await until(
-    () => app.jobs.list(lab.id).some((job) => job.status === "succeeded"),
+    () => app.jobs.list(lab.id).some((job) => job.notified),
     15_000,
-    "job",
+    "job delivered",
   );
-  await until(
-    () => fake?.requests.length === 5,
-    15_000,
-    "job notification turn",
-  );
+  await until(() => fake?.script.length === 0, 15_000, "job notification turn");
   await until(
     async () => idle(await app.sessions.state(lab.id)),
     15_000,
@@ -149,9 +150,9 @@ test("a real Pi session records research, receives a job outcome and revises a P
   );
 
   const job = app.jobs.list(lab.id)[0] as Job;
+  expect(job.status).toBe("succeeded");
   expect(job.metrics).toEqual([{ name: "logloss", value: 0.61 }]);
   expect(job.commitHash).toMatch(/^[0-9a-f]{40}$/);
-  expect(job.notified).toBe(true);
   const messages = await app.sessions.messages(lab.id);
   const notification = messages.find(
     (message) => message.role === "user" && message.text.includes("[Pico] Job"),
@@ -177,7 +178,7 @@ test("a real Pi session records research, receives a job outcome and revises a P
     {
       toolCalls: [
         {
-          name: "save_record",
+          name: pico("save_record"),
           arguments: {
             kind: "page",
             title: "Panorama",
@@ -219,7 +220,7 @@ test("a real Pi session records research, receives a job outcome and revises a P
     {
       toolCalls: [
         {
-          name: "save_record",
+          name: pico("save_record"),
           arguments: {
             id: page.id,
             kind: "page",
@@ -229,7 +230,7 @@ test("a real Pi session records research, receives a job outcome and revises a P
           },
         },
         {
-          name: "save_record",
+          name: pico("save_record"),
           arguments: {
             kind: "note",
             title: "Baseline disponível",
@@ -273,7 +274,6 @@ test("a real Pi session records research, receives a job outcome and revises a P
     kind: "page",
     id: page.id,
   });
-  expect(systemText).toContain("Pages and Panorama");
 
   const events = await app.fetch(
     new Request(`http://127.0.0.1:4317/api/labs/${lab.id}/events`),
@@ -284,19 +284,84 @@ test("a real Pi session records research, receives a job outcome and revises a P
   await reader?.cancel();
 }, 60_000);
 
-test("a lab without a usable model reports the error instead of hanging", async () => {
-  box = sandbox();
+test("the laboratory conversation resumes after a server restart", async () => {
+  fake = startFakeModel();
+  box = sandbox({ fakeModelUrl: fake.url });
   const { app } = box;
-  const lab = await app.labs.create({ name: "Sem modelo" });
+  const lab = await app.labs.create({
+    name: "Retomada",
+    provider: "anthropic",
+    model: "sonnet",
+    thinking: "off",
+  });
+  fake.script.push({ text: "Guardei o número 7." });
+  await app.sessions.send(lab.id, "Lembre o número 7");
+  await until(async () => idle(await app.sessions.state(lab.id)), 15_000);
+  const sessionId = app.labs.sessionId(lab.id);
+  expect(sessionId).toBeTruthy();
+  const paths = app.paths;
+  await app.close();
+  const { createApp } = await import("../src/app");
+  const restarted = createApp(paths);
+  try {
+    const before = await restarted.sessions.messages(lab.id);
+    expect(before.map((message) => message.text)).toEqual([
+      "Lembre o número 7",
+      "Guardei o número 7.",
+    ]);
+    fake.script.push({ text: "Era 7." });
+    await restarted.sessions.send(lab.id, "Qual número?");
+    await until(
+      async () => idle(await restarted.sessions.state(lab.id)),
+      15_000,
+    );
+    expect(restarted.labs.sessionId(lab.id)).toBe(sessionId);
+    expect(requestText(fake.requests.at(-1))).toContain("Lembre o número 7");
+    expect((await restarted.sessions.messages(lab.id)).at(-1)?.text).toBe(
+      "Era 7.",
+    );
+  } finally {
+    await restarted.close();
+  }
+}, 40_000);
+
+test("model errors and unavailable models are reported instead of hanging", async () => {
+  fake = startFakeModel();
+  box = sandbox({ fakeModelUrl: fake.url });
+  const { app } = box;
+  const lab = await app.labs.create({
+    name: "Com erro",
+    provider: "anthropic",
+    model: "sonnet",
+    thinking: "off",
+  });
+  fake.script.push({
+    error: {
+      status: 400,
+      type: "invalid_request_error",
+      message: "prompt is too long",
+    },
+  });
+  await call(app, `/labs/${lab.id}/chat`, { body: { message: "olá" } });
+  await until(
+    async () => !!(await app.sessions.state(lab.id)).lastError,
+    15_000,
+    "error",
+  );
+  await until(async () => idle(await app.sessions.state(lab.id)), 15_000);
+
+  const removed = await app.labs.create({ name: "Sem modelo" });
+  app.db.run(
+    "UPDATE labs SET provider='anthropic', model='removed-model' WHERE id=?",
+    [removed.id],
+  );
   const response = await app.fetch(
-    new Request(`http://127.0.0.1:4317/api/labs/${lab.id}/chat`, {
+    new Request(`http://127.0.0.1:4317/api/labs/${removed.id}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: "olá" }),
     }),
   );
-  expect(response.status).toBe(500);
-  const state = await app.sessions.state(lab.id);
-  expect(state.streaming).toBe(false);
-  expect(state.lastError).toBeTruthy();
-}, 30_000);
+  expect(response.status).toBe(400);
+  expect(JSON.stringify(await response.json())).toContain("not available");
+}, 40_000);
