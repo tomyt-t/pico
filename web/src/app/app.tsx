@@ -16,6 +16,7 @@ import {
   dockWidthRange,
   remember,
   savedDockWidth,
+  savedLab,
   savedTheme,
 } from "@/web/app/theme";
 import { useTranslation } from "@/web/components/i18n";
@@ -403,7 +404,9 @@ export function App() {
     labs: new Set(),
     changed: () => refreshPendingSends((previous) => previous + 1),
   });
-  const labId = route?.labId ?? labs.data?.[0]?.id ?? "";
+  const lastLab = labs.data?.find((entry) => entry.id === savedLab());
+  const defaultLab = lastLab ?? labs.data?.[0];
+  const labId = route?.labId ?? defaultLab?.id ?? "";
   const lab = labs.data?.find((entry) => entry.id === labId);
   const { draft, updateDraft } = useChatDrafts(labId);
   const page = route?.page ?? "chat";
@@ -417,9 +420,11 @@ export function App() {
     if (labId) document.getElementById("main-content")?.focus();
   }, [labId]);
   useEffect(() => {
-    if (!route && labs.data?.[0])
-      navigate({ labId: labs.data[0].id, page: "chat" });
-  }, [route, labs.data]);
+    if (!route && defaultLab) navigate({ labId: defaultLab.id, page: "chat" });
+  }, [route, defaultLab]);
+  useEffect(() => {
+    if (lab) remember("pico-lab", lab.id);
+  }, [lab]);
   const saved = (updated: Lab) => {
     setSettings(null);
     labs.refresh();

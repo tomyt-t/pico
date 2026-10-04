@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createApp } from "../src/app";
 import type { AgentDefinition, AgentRunDetail } from "../src/contracts";
+import { lastAssistantText } from "../src/subagents";
 import {
   call,
   type FakeModel,
@@ -409,3 +410,87 @@ test("stopping, model failure and server shutdown have distinct durable outcomes
     await restarted.close();
   }
 }, 60_000);
+
+test("an interrupted run resumes in its saved conversation instead of starting over", async () => {
+  fake = startFakeModel((req) => {
+    if (!isWorker(req)) return { text: "Outcome received" };
+    const sent = req.messages.map((message) => messageText(message.content));
+    if (sent.some((text) => text.includes("was cut short")))
+      return { text: "Resumed: partial.md kept" };
+    if (!hasToolResult(req))
+      return {
+        toolCalls: [
+          {
+            name: "Write",
+            arguments: { file_path: "partial.md", content: "partial work" },
+          },
+        ],
+      };
+    return {
+      toolCalls: [{ name: "Bash", arguments: { command: "sleep 8" } }],
+    };
+  });
+  box = sandbox({ fakeModelUrl: fake.url });
+  const { app } = box;
+  await configure();
+  const lab = await newLab();
+  const run = app.subagents.start(lab, "bibliography", "Long shutdown work");
+  await until(
+    () => app.subagents.get(lab.id, run.id).currentTool === "Bash",
+    20_000,
+  );
+  const sessionId = app.subagents.get(lab.id, run.id).sessionId;
+  expect(sessionId).toBeTruthy();
+  const restarted = await reopen();
+  try {
+    expect(restarted.subagents.get(lab.id, run.id).status).toBe("interrupted");
+    await until(() => restarted.subagents.get(lab.id, run.id).notified, 20_000);
+    expect(
+      fake.requests
+        .filter((req) => !isWorker(req))
+        .some((req) =>
+          req.messages.some((message) =>
+            messageText(message.content).includes(
+              `mcp__pico__resume_subagent with id ${run.id}`,
+            ),
+          ),
+        ),
+    ).toBe(true);
+    const resumed = await call<{ status: string }>(
+      restarted,
+      `/labs/${lab.id}/agent-runs/${run.id}/resume`,
+      { method: "POST", body: {} },
+    );
+    expect(resumed.status).toBe("running");
+    await until(
+      () => restarted.subagents.get(lab.id, run.id).status === "completed",
+      20_000,
+    );
+    expect(restarted.subagents.get(lab.id, run.id)).toMatchObject({
+      sessionId,
+      result: "Resumed: partial.md kept",
+      error: null,
+    });
+    const last = fake.requests.filter(isWorker).at(-1);
+    const history = JSON.stringify(last?.messages);
+    expect(history).toContain("Long shutdown work");
+    expect(history).toContain("partial.md");
+    expect(() => restarted.subagents.resume(lab, run.id)).toThrow("completed");
+  } finally {
+    await restarted.close();
+  }
+}, 60_000);
+
+test("a plan limit notice never replaces the agent's last message", () => {
+  const assistant = (text: string, model: string) => ({
+    type: "assistant" as const,
+    uuid: crypto.randomUUID(),
+    message: { role: "assistant", model, content: [{ type: "text", text }] },
+  });
+  expect(
+    lastAssistantText([
+      assistant("Controls written; running the smoke test.", "claude-sonnet-5"),
+      assistant("You've hit your session limit · resets 4:20am", "<synthetic>"),
+    ]),
+  ).toBe("Controls written; running the smoke test.");
+});

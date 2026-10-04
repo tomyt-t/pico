@@ -4,6 +4,7 @@ import {
   type ClaudeSession,
   displayToolName,
   readTranscript,
+  type TranscriptMessage,
   textOf,
 } from "./claude-runtime";
 import type {
@@ -182,13 +183,60 @@ export class Subagents {
     );
     if (agentId === "research-editor") this.options.editorial.begin(lab, id);
     const run = this.get(lab.id, id);
+    return this.launch(lab, run, definition, run.task);
+  }
+
+  /** Continues an unfinished run in its own Claude Code conversation, e.g.
+   *  after a plan limit or a restart, instead of starting the task over. */
+  resume(lab: Lab, id: string, message?: string | null): AgentRun {
+    if (this.closing) throw conflict("Server is shutting down");
+    const previous = this.get(lab.id, id);
+    if (this.active.has(id) || previous.status === "running")
+      throw conflict(`Agent run ${id} is still running`);
+    if (previous.status === "completed")
+      throw conflict(
+        `Agent run ${id} completed; start a new run for further work`,
+      );
+    if (!previous.sessionId)
+      throw conflict(
+        `Agent run ${id} has no saved conversation; start a new run`,
+      );
+    if (message != null && typeof message !== "string")
+      throw badRequest("message must be a string");
+    if (previous.agentId === "research-editor") {
+      const current = this.list(lab.id).find(
+        (run) => run.agentId === "research-editor" && run.status === "running",
+      );
+      if (current)
+        throw conflict(
+          `Editor ${current.id} is already running in this laboratory`,
+        );
+    }
+    const definition = this.options.catalog.get(previous.agentId);
+    this.options.beforeStart?.(lab.id, previous.campaignId);
+    this.db.run(
+      "UPDATE agent_runs SET status = 'running', error = NULL, ended_at = NULL, notified = 0 WHERE id = ?",
+      [id],
+    );
+    if (previous.agentId === "research-editor")
+      this.options.editorial.begin(lab, id);
+    const prompt = `[Pico] Your previous turn on this task was cut short (${previous.status}${previous.error ? `: ${previous.error}` : ""}). Continue from where you stopped: check the files, records and jobs you already produced before redoing anything, then finish the task and report as instructed.${message?.trim() ? `\n\n${message.trim()}` : ""}`;
+    return this.launch(lab, this.get(lab.id, id), definition, prompt);
+  }
+
+  private launch(
+    lab: Lab,
+    run: AgentRun,
+    definition: AgentDefinition,
+    prompt: string,
+  ): AgentRun {
     const active: Active = {
       done: Promise.resolve(),
       currentTool: null,
       streamingText: "",
     };
-    this.active.set(id, active);
-    active.done = this.run(lab, run, definition, active);
+    this.active.set(run.id, active);
+    active.done = this.run(lab, run, definition, active, prompt);
     return run;
   }
 
@@ -197,6 +245,7 @@ export class Subagents {
     run: AgentRun,
     definition: AgentDefinition,
     active: Active,
+    prompt: string,
   ): Promise<void> {
     let result = "";
     let error: string | null = null;
@@ -231,10 +280,10 @@ export class Subagents {
               [session.sessionId, run.id],
             );
         });
-        if (!active.stop) await session.prompt(run.task);
+        if (!active.stop) await session.prompt(prompt);
         const reply = session.lastResult;
         if (reply) {
-          result = reply.ok ? reply.text : lastAssistantText(session);
+          result = reply.ok ? reply.text : lastAssistantText(session.messages);
           if (!reply.ok) {
             status = "failed";
             error = reply.text || "The model returned an error";
@@ -314,6 +363,17 @@ export class Subagents {
     for (const row of rows) {
       if (this.closing) return;
       try {
+        // A run cut off by a restart has no report yet; its transcript does.
+        if (!row.result && row.session_id && row.status !== "completed") {
+          row.result = lastAssistantText(
+            await readTranscript(row.session_id).catch(() => []),
+          );
+          if (row.result)
+            this.db.run("UPDATE agent_runs SET result = ? WHERE id = ?", [
+              row.result,
+              row.id,
+            ]);
+        }
         if (await this.options.onFinished(this.view(row)))
           this.db.run("UPDATE agent_runs SET notified = 1 WHERE id = ?", [
             row.id,
@@ -338,16 +398,25 @@ export class Subagents {
   }
 }
 
-/** Partial work survives a failed turn; keep what the agent last said. */
-function lastAssistantText(session: ClaudeSession): string {
-  for (const entry of [...session.messages].reverse())
+/** Partial work survives a failed turn; keep what the agent last said.
+ *  Claude Code's own notices, such as the plan limit, are not the agent's. */
+export function lastAssistantText(
+  messages: readonly TranscriptMessage[],
+): string {
+  for (const entry of [...messages].reverse())
     if (entry.type === "assistant") {
-      const text = textOf((entry.message as { content?: unknown }).content);
+      const message = entry.message as { content?: unknown; model?: string };
+      if (message.model === "<synthetic>") continue;
+      const text = textOf(message.content);
       if (text) return text;
     }
   return "";
 }
 
 export function subagentNotification(run: AgentRun): string {
-  return `[Pico] Subagent "${run.name}" (${run.id}) finished: ${run.status}\nTask: ${run.task}\n${run.error ? `Error: ${run.error}\n` : ""}${run.result || "No final report. Consult mcp__pico__list_subagents with this run id for the conversation."}`;
+  const resumable =
+    run.status !== "completed" && run.sessionId
+      ? `\nIts conversation is saved. To continue this work instead of starting over, call mcp__pico__resume_subagent with id ${run.id}${run.error?.includes("plan usage limit") ? " after the plan limit resets" : ""}.`
+      : "";
+  return `[Pico] Subagent "${run.name}" (${run.id}) finished: ${run.status}\nTask: ${run.task}\n${run.error ? `Error: ${run.error}\n` : ""}${run.result ? `${run.status === "completed" ? "" : "Last message before it stopped:\n"}${run.result}` : "No final report. Consult mcp__pico__list_subagents with this run id for the conversation."}${resumable}`;
 }

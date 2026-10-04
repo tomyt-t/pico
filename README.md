@@ -127,6 +127,13 @@ coordenador; a entrega é tentada novamente se o coordenador estiver
 indisponível. O histórico
 permanece consultável após a entrega. O servidor marca execuções em andamento
 como interrompidas ao encerrar ou reiniciar, sem retomá-las automaticamente.
+Uma execução que falhou (inclusive pelo limite do plano Claude), foi parada ou
+interrompida guarda como resultado a última mensagem do próprio agente, nunca
+o aviso do Claude Code, e pode ser **retomada** na mesma conversa:
+`resume_subagent` (ou o botão **Retomar** na execução, `POST
+/api/labs/:id/agent-runs/:run/resume`) reabre o `session_id` salvo com uma
+mensagem para continuar de onde parou, sem refazer o trabalho. O aviso de falha
+entregue ao Pico indica o id a retomar. Execuções concluídas não são retomadas.
 Jobs de shell continuam independentes: sobrevivem ao servidor e à interrupção
 do agente. Agentes e jobs de uma campanha entregam seus resultados ao coordenador
 dela; os demais entregam ao Pico.
@@ -208,7 +215,7 @@ pendentes, incluindo avisos de especialistas interrompidos. O prompt orienta
 reconciliar jobs existentes antes de iniciar substitutos: jobs desanexados
 sobrevivem e não são reexecutados automaticamente. Campanhas pausadas ou com
 decisão pendente não retomam sozinhas. Agentes efêmeros interrompidos são mantidos
-no histórico; o coordenador decide se precisa de uma nova tentativa.
+no histórico; o coordenador decide se os retoma ou inicia uma nova tentativa.
 
 `campaigns` persiste estado, plano, resumos, resultado, limites, consumo, modelo,
 `session_id` da conversa e entrega de notificações; `campaign_settings` guarda os
@@ -311,7 +318,9 @@ não interrompe Pico. “Discutir com o Pico” acrescenta a referência ao rasc
 sem enviar automaticamente; cada mensagem da conversa oferece “Copiar” e
 “Discutir”, que cita o trecho no rascunho. Rascunhos ficam separados por
 laboratório na aba, e um envio pendente não apaga edições posteriores nem
-permite um segundo envio ao sair e voltar ao lab.
+permite um segundo envio ao sair e voltar ao lab. Sem um endereço de
+laboratório, a UI abre o último laboratório visitado neste navegador (o
+primeiro criado, se não houver um).
 
 Enquanto Pico trabalha, uma linha de estado mostra a tool em execução, o tempo
 do turno, o número de chamadas e a fila de mensagens; o raciocínio do modelo

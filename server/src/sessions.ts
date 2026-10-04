@@ -375,11 +375,20 @@ export class LabSessions {
               : "pico",
         }),
       }),
+      // A worker resumes only its own run's conversation, when it is resumed.
       resume: worker
-        ? null
+        ? worker.run.sessionId
         : campaign
           ? campaign.sessionId
           : this.deps.labs.sessionId(lab.id),
+      ...(worker?.run.sessionId
+        ? {
+            usageBaseline: {
+              tokens: worker.run.usage.total,
+              cost: worker.run.usage.cost,
+            },
+          }
+        : {}),
       ...(campaignId
         ? this.deps.campaigns.sessionOptions(lab.id, campaignId, !!campaign)
         : {}),

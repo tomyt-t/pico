@@ -531,14 +531,17 @@ Validação:
   sistema. Os testes de caminhos passaram a montar as expectativas com
   `join`/`resolve`, e o teste do symlink externo é dispensado quando o Windows
   não permite criar symlinks. No Linux e no macOS do CI não foi rodado.
-- **Com a assinatura real:** só o `accountInfo()` do spike, sem nenhum prompt.
-  Uma sonda de leitura do login e do uso do plano foi bloqueada pela política
-  de permissões do agente, então o roteiro do critério de pronto continua com
-  o pesquisador: `bun run login`; conferir o uso extra pago desativado na
-  conta; `bun run dev`; criar um lab, conversar e rodar um job; iniciar uma
-  campanha com 2 especialistas em paralelo e ver os resultados chegarem ao
-  coordenador; pedir uma revisão editorial; pausar e retomar; reiniciar o
-  servidor e ver a conversa do lab continuar.
+- **Com a assinatura real (Windows, 2026-10-03):** `bun run login` abriu o
+  login oficial e o pesquisador autorizou no navegador; o Claude Code concluiu
+  sozinho, sem colar código. `bun start` aceitou o login ("Claude
+  subscription: Claude Pro"), serviu a UI e a API, e `/api/models` trouxe os
+  modelos da assinatura (Opus 5.5, Sonnet 5.5, Fable 5.1, Haiku 4.5 e versões
+  anteriores por id completo). Nenhum prompt foi enviado ao modelo. O resto do
+  roteiro do critério de pronto continua com o pesquisador: conferir o uso
+  extra pago desativado na conta; criar um lab, conversar e rodar um job;
+  iniciar uma campanha com 2 especialistas em paralelo e ver os resultados
+  chegarem ao coordenador; pedir uma revisão editorial; pausar e retomar;
+  reiniciar o servidor e ver a conversa do lab continuar.
 
 Além do plano:
 

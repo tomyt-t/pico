@@ -484,6 +484,19 @@ export function createPicoTools({
           return await subagents.stop(lab.id, params.id);
         },
       ),
+      define(
+        "resume_subagent",
+        "Continue a failed, stopped or interrupted agent run in its saved conversation, e.g. after a Claude plan limit resets or the server restarted. The agent keeps everything it read and wrote; message adds optional guidance. Returns immediately; the outcome is delivered here automatically.",
+        { id: z.string(), message: z.string().optional() },
+        (params) => {
+          if (
+            campaignId &&
+            subagents.get(lab.id, params.id).campaignId !== campaignId
+          )
+            throw badRequest("This agent belongs to another coordinator");
+          return subagents.resume(lab, params.id, params.message ?? null);
+        },
+      ),
     );
   if (campaigns && campaignCoordinator && campaignId)
     tools.push(

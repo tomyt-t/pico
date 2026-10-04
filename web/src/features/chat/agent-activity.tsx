@@ -377,6 +377,25 @@ export function AgentRunSheet({
             {action.busy ? t("chat.stopping") : t("agents.stop")}
           </button>
         )}
+        {current.status !== "running" &&
+          current.status !== "completed" &&
+          current.sessionId && (
+            <button
+              type="button"
+              className="small"
+              title={t("agents.resumeHint")}
+              disabled={action.busy}
+              onClick={async () => {
+                if (await action.run(`${path}/resume`)) {
+                  detail.refresh();
+                  refresh();
+                }
+              }}
+            >
+              <Icon name="refresh" size={13} />
+              {action.busy ? t("agents.resuming") : t("agents.resume")}
+            </button>
+          )}
       </footer>
     </>
   );

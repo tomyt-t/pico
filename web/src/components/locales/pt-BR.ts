@@ -503,6 +503,10 @@ export const ptBR = {
     picoAgent: "Agente do Pico",
     toolResult: "Ver resultado da ferramenta",
     stop: "Interromper",
+    resume: "Retomar",
+    resuming: "Retomando…",
+    resumeHint:
+      "Continua esta execução na mesma conversa, sem recomeçar a tarefa",
     finished: "{{name}} concluiu",
     failed: "{{name}} falhou",
     stopped: "{{name}} foi interrompido",

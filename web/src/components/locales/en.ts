@@ -502,6 +502,10 @@ export const en: Dictionary = {
     picoAgent: "Pico's agent",
     toolResult: "View tool result",
     stop: "Stop",
+    resume: "Resume",
+    resuming: "Resuming…",
+    resumeHint:
+      "Continues this run in its saved conversation instead of starting over",
     finished: "{{name}} finished",
     failed: "{{name}} failed",
     stopped: "{{name}} was stopped",

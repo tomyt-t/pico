@@ -38,6 +38,15 @@ export function savedDockWidth(): number {
   return 400;
 }
 
+/** The laboratory opened last, so a restart returns to the same work. */
+export function savedLab(): string | null {
+  try {
+    return localStorage.getItem("pico-lab");
+  } catch {
+    return null;
+  }
+}
+
 export function remember(key: string, value: string) {
   try {
     localStorage.setItem(key, value);

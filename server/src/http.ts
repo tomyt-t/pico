@@ -398,6 +398,15 @@ export function createApi(
         );
       if (itemId && action === "stop" && method === "POST")
         return json(await subagents.stop(lab.id, itemId));
+      if (itemId && action === "resume" && method === "POST")
+        return json(
+          subagents.resume(
+            lab,
+            itemId,
+            (await body<{ message?: string }>(request))?.message,
+          ),
+          202,
+        );
       return undefined;
     }
 
