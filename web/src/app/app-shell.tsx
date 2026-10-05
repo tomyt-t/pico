@@ -20,6 +20,7 @@ import {
   type ActivitySummary,
   summaryText,
 } from "@/web/features/campaigns/summary";
+import { ActivityHover } from "@/web/features/experiments/activity-hover";
 
 export const pages: { id: Page; icon: IconName }[] = [
   { id: "chat", icon: "chat" },
@@ -92,12 +93,16 @@ export function AppShell({
       ? lab.model
       : t("shell.defaultModel");
   const labName = lab?.name ?? t("shell.noLaboratory");
+  // An idle Pico with a detached job running is waiting for its outcome.
+  const waiting = !!session && !session.streaming && !!activity?.jobs.length;
   const sessionLabel = t(
     !session
       ? "activity.unknown"
       : session.streaming
         ? "shell.working"
-        : "shell.idle",
+        : waiting
+          ? "shell.waiting"
+          : "shell.idle",
   );
   const labPanorama =
     panorama?.labId === labId && panorama.kind === "page"
@@ -273,25 +278,34 @@ export function AppShell({
         </nav>
       )}
       <div className="sidebar-footer">
-        <div
-          className="sidebar-session"
-          role="status"
-          aria-label={sessionLabel}
-          title={sessionLabel}
+        <ActivityHover
+          labId={labId}
+          jobs={activity?.jobs ?? []}
+          agents
+          className="sidebar-session-hover"
         >
-          <Logo size={19} />
-          <div>
-            <strong>{sessionLabel}</strong>
-            <small>
-              {activity?.known
-                ? summaryText(activity)
-                : t("shell.researchPartner")}
-            </small>
+          <div
+            className="sidebar-session"
+            role="status"
+            aria-label={sessionLabel}
+            // Focusable so keyboard readers can open the activity summary.
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: The status opens a read-only summary on focus.
+            tabIndex={0}
+          >
+            <Logo size={19} />
+            <div>
+              <strong>{sessionLabel}</strong>
+              <small>
+                {activity?.known
+                  ? summaryText(activity)
+                  : t("shell.researchPartner")}
+              </small>
+            </div>
+            <span
+              className={`dot ${session?.streaming ? "busy" : waiting ? "waiting" : session ? "idle" : ""}`}
+            />
           </div>
-          <span
-            className={`dot ${session?.streaming ? "busy" : session ? "idle" : ""}`}
-          />
-        </div>
+        </ActivityHover>
         <div className="sidebar-tools">
           <button
             className="nav-item"

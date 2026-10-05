@@ -19,6 +19,7 @@ import { jobSuperseded, jobTone } from "@/web/components/job-row";
 import { Empty, PageHeading, Status } from "@/web/components/primitives";
 import { QueryState } from "@/web/components/query-state";
 import { LinkChips, recordHref } from "@/web/components/record-card";
+import { ActivityHover } from "@/web/features/experiments/activity-hover";
 import {
   type Front,
   type FrontState,
@@ -241,21 +242,32 @@ export function FrontCard({
       </div>
       <div className="front-side">
         {front.jobs.length > 0 && (
-          <span className="front-jobs">
-            <span className="front-job-dots">
-              {front.jobs.slice(0, 8).map((job) => (
-                <i
-                  key={job.id}
-                  className={`dot ${jobTone(
-                    job,
-                    jobSuperseded(job, experiment, records, front.jobs) !==
-                      false,
-                  )}`}
-                />
-              ))}
+          <ActivityHover
+            labId={experiment.labId}
+            jobs={front.jobs}
+            placement="bottom"
+            className="front-jobs-hover"
+          >
+            <span
+              className="front-jobs"
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: Focus opens the execution summary for keyboard readers.
+              tabIndex={0}
+            >
+              <span className="front-job-dots">
+                {front.jobs.slice(0, 8).map((job) => (
+                  <i
+                    key={job.id}
+                    className={`dot ${jobTone(
+                      job,
+                      jobSuperseded(job, experiment, records, front.jobs) !==
+                        false,
+                    )}`}
+                  />
+                ))}
+              </span>
+              {t("fronts.jobs", { count: front.jobs.length })}
             </span>
-            {t("fronts.jobs", { count: front.jobs.length })}
-          </span>
+          </ActivityHover>
         )}
         <span>{t("common.by", { author: author(experiment.author) })}</span>
         <time dateTime={at} title={timestamp(at)}>

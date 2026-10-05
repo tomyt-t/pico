@@ -326,11 +326,29 @@ Enquanto Pico trabalha, uma linha de estado mostra a tool em execução, o tempo
 do turno, o número de chamadas e a fila de mensagens; o raciocínio do modelo
 aparece recolhido e renderizado como Markdown. O rodapé mostra tokens e consumo
 estimado no formato do idioma. Ao rolar para cima, um botão volta à última
-mensagem e avisa quando chegam mensagens novas.
+mensagem e avisa quando chegam mensagens novas. Com Pico ocioso e um job
+desanexado em execução (um treino, por exemplo), a conversa e a barra lateral
+mostram “Aguardando execução” com o nome do job e o tempo decorrido, em vez de
+“Pico ocioso”; Pico é avisado quando o job termina.
 
-O chat carrega inicialmente as 50 mensagens mais recentes. Ao subir perto do
-início, busca mais 50 anteriores e preserva a posição de leitura; o botão
-“Carregar mensagens anteriores” também permite buscar ou tentar novamente.
+O progresso dos jobs vem do próprio log, sem tokens: o Experimenter instrui seus
+scripts a imprimir linhas JSON curtas, como
+`{"pico":"progress","phase":"gen","done":13,"total":25,"unit":"itens","t":1791125000}`
+(`t` em segundos Unix), poucas vezes por fase, e a manter o resto do log enxuto,
+porque o fim do log chega à conversa quando o job termina. Sem essas linhas, a UI
+lê contadores `[13/25]` e barras tqdm. Ao passar o mouse (ou focar) no estado
+da barra lateral ou nas execuções de uma frente, um cartão mostra para cada job
+o tempo de execução, o progresso e o tempo restante estimado: pela taxa entre
+linhas JSON da mesma fase ou, sem `t`, pelo tempo total do job (marcado como
+aproximado). O cartão da barra lateral também lista os agentes recentes, com
+tempo de execução ou duração e estado final; agentes não têm estimativa.
+
+O chat busca as 50 mensagens mais recentes e renderiza cerca de três telas de
+conversa; páginas anteriores só são buscadas quando faltam mensagens para
+preencher essas telas. No topo do trecho renderizado, dois botões flutuantes
+estendem o histórico sem rolagem automática: “Carregar mais” acrescenta outras
+três telas e “Carregar tudo” carrega a conversa desde o início. A posição de
+leitura é preservada.
 Atualizações ao vivo conservam as páginas já carregadas, sem duplicar mensagens.
 O total de tokens e o consumo estimado continuam abrangendo o histórico da
 conversa, mesmo quando apenas parte dele está na UI; o Claude Code informa o

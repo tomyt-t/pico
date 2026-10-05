@@ -251,7 +251,11 @@ function LabWorkspace({
         pageId={route?.id}
         session={controller.state}
         researchLine={researchLine}
-        activity={summarize(activity.campaigns.data, activity.agents.data)}
+        activity={summarize(
+          activity.campaigns.data,
+          activity.agents.data,
+          activity.jobs.data,
+        )}
         onRefresh={() => {
           shell.onRefresh();
           controller.refresh();
@@ -368,6 +372,7 @@ function LabWorkspace({
                   draft={draft}
                   onDraft={onDraft}
                   controller={controller}
+                  jobs={activity.jobs.data}
                   variant={page === "chat" ? "page" : "dock"}
                   focusSignal={focusSignal || undefined}
                 />

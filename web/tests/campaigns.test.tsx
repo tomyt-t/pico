@@ -3,6 +3,7 @@ import type {
   AgentRun,
   Campaign,
   CampaignDetail,
+  Job,
   Lab,
 } from "@pico/server/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -183,6 +184,22 @@ test("states have their own colour and sentence", () => {
   ).toBe("1 campanha · 2 especialistas · US$ 0,75");
   expect(summaryText(summarize([], []))).toBe("Nada em execução");
   expect(summaryText(summarize(undefined, []))).toBe("");
+});
+
+test("an idle laboratory names the detached job it waits for", () => {
+  const job = (id: string, status: Job["status"] = "running") =>
+    ({
+      id,
+      name: `train-${id}`,
+      status,
+      createdAt: `2026-10-04T1${id}:00:00Z`,
+    }) as Job;
+  expect(
+    summaryText(summarize([], [], [job("2"), job("1", "succeeded")])),
+  ).toBe("train-2");
+  const two = summarize([], [], [job("2"), job("1")]);
+  expect(two.jobs.map((entry) => entry.id)).toEqual(["1", "2"]);
+  expect(summaryText(two)).toBe("2 execuções");
 });
 
 test("sidebar keeps pending roots without workers, hides closed history and separates Pico agents", () => {

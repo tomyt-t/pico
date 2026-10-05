@@ -1,4 +1,4 @@
-import type { Lab } from "@pico/server/contracts";
+import type { Job, Lab } from "@pico/server/contracts";
 import {
   useCallback,
   useEffect,
@@ -12,10 +12,12 @@ import { useTranslation } from "@/web/components/i18n";
 import { Logo } from "@/web/components/logo";
 import { Markdown } from "@/web/components/markdown";
 import { Icon, Loading, Notice } from "@/web/components/primitives";
+import { useNow } from "@/web/components/use-now";
 import { MessageComposer } from "@/web/features/chat/message-composer";
 import {
   ChatMessage,
   groupMessages,
+  type MessageGroup,
   subjectOf,
   Thinking,
   ToolCallGroup,
@@ -80,11 +82,60 @@ function WorkingIndicator({
   );
 }
 
+/** While Pico is idle, the detached jobs it waits for, e.g. a training run. */
+function WaitingIndicator({ jobs }: { jobs: Job[] }) {
+  const { t } = useTranslation();
+  const now = useNow(true);
+  const [first] = jobs;
+  if (!first) return null;
+  return (
+    <div className="session-indicator working" role="status" aria-live="polite">
+      <span className="dot waiting" />
+      <span>{t("chat.waitingJob")}</span>
+      <span className="working-tool">
+        <span className="mono">· {first.name}</span>
+      </span>
+      <span aria-hidden="true">
+        · {formatElapsed(now - Date.parse(first.startedAt ?? first.createdAt))}
+      </span>
+      {jobs.length > 1 && (
+        <span>· {t("chat.moreJobs", { count: jobs.length - 1 })}</span>
+      )}
+      <span>· {t("chat.waitingHint")}</span>
+    </div>
+  );
+}
+
+/** The conversation renders about this many screens at first and per "load
+ *  more"; older pages are fetched from the server only to fill them. */
+const screensPerPage = 3;
+/** Groups added per layout pass while filling the window. */
+const fillStep = 6;
+
+const firstMessageId = (group: MessageGroup): string =>
+  group.kind === "tools" ? (group.items[0]?.id ?? group.id) : group.message.id;
+// A tool group can absorb tool messages from an older page; find it by member.
+const holds = (group: MessageGroup, id: string): boolean =>
+  group.kind === "tools"
+    ? group.items.some((item) => item.id === id)
+    : group.message.id === id;
+
+/** The first message still visible at the top, to keep it in place while
+ *  content is added above it. */
+function readingAnchor(container: HTMLElement) {
+  const top = container.getBoundingClientRect().top;
+  const node = Array.from(
+    container.querySelectorAll<HTMLElement>("[data-message-id]"),
+  ).find((item) => item.getBoundingClientRect().bottom >= top);
+  return node ? { node, top: node.getBoundingClientRect().top } : null;
+}
+
 export function Chat({
   lab,
   draft,
   onDraft,
   controller,
+  jobs = [],
   variant = "page",
   focusSignal,
 }: {
@@ -92,6 +143,8 @@ export function Chat({
   draft: string;
   onDraft: (draft: string, expected?: string) => void;
   controller: LabChatController;
+  /** Running detached jobs of this laboratory. */
+  jobs?: Job[];
   variant?: "page" | "dock";
   focusSignal?: number;
 }) {
@@ -100,6 +153,7 @@ export function Chat({
   const scroll = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const historyRef = useRef<HTMLDivElement>(null);
   // `follow` mirrors `following` for observers; the state drives the button.
   const follow = useRef(true);
   const [following, setFollowing] = useState(true);
@@ -108,12 +162,30 @@ export function Chat({
   // passes through are not the reader's.
   const pinning = useRef<number>(undefined);
   const mounted = useRef(false);
-  const olderAnchor = useRef<{
-    firstId?: string;
-    nodes: { node: HTMLElement; top: number }[];
-  } | null>(null);
+  const anchor = useRef<{ node: HTMLElement; top: number } | null>(null);
   const ignoreHistoryResize = useRef(false);
   const groups = useMemo(() => groupMessages(messages), [messages]);
+  // The rendered window starts at this message; null until first measured.
+  const [windowStart, setWindowStart] = useState<string | null>(null);
+  // Minimum height of the rendered history in pixels; 0 means the first
+  // screens, Infinity everything.
+  const [goal, setGoal] = useState(0);
+  const [nearTop, setNearTop] = useState(false);
+  const [windowLab, setWindowLab] = useState(lab.id);
+  if (windowLab !== lab.id) {
+    setWindowLab(lab.id);
+    setWindowStart(null);
+    setGoal(0);
+  }
+  const found =
+    windowStart === null
+      ? -1
+      : groups.findIndex((group) => holds(group, windowStart));
+  const start = found >= 0 ? found : Math.max(0, groups.length - fillStep * 2);
+  const shown = start ? groups.slice(start) : groups;
+  const hasMore = start > 0 || controller.hasOlderMessages;
+  const loadingAll =
+    goal === Number.POSITIVE_INFINITY && hasMore && !controller.olderError;
   const setFollow = (value: boolean) => {
     follow.current = value;
     setFollowing(value);
@@ -131,41 +203,55 @@ export function Chat({
     }
     setFollow(atBottom);
   };
-  const loadOlder = () => {
+  const extend = (next: number) => {
     const container = scroll.current;
-    if (!container || controller.loadingOlder || olderAnchor.current) return;
-    olderAnchor.current = {
-      firstId: messages[0]?.id,
-      nodes: Array.from(
-        container.querySelectorAll<HTMLElement>("[data-message-id]"),
-      )
-        .filter(
-          (node) =>
-            node.getBoundingClientRect().bottom >=
-            container.getBoundingClientRect().top,
-        )
-        .map((node) => ({ node, top: node.getBoundingClientRect().top })),
-    };
+    if (!container) return;
     setFollow(false);
-    void controller.loadOlder().then((loaded) => {
-      if (!loaded) olderAnchor.current = null;
-    });
+    anchor.current = readingAnchor(container);
+    setGoal(next);
   };
-  // biome-ignore lint/correctness/useExhaustiveDependencies: The anchor is consumed once, when the message list that triggered it changes.
+  const loadMore = () => {
+    const history = historyRef.current;
+    const container = scroll.current;
+    if (history && container)
+      extend(history.offsetHeight + screensPerPage * container.clientHeight);
+  };
+  const loadAll = () => extend(Number.POSITIVE_INFINITY);
+  // Grow the rendered window until it fills its goal: first from messages
+  // already fetched, then one older page at a time. The reading position
+  // stays put while content is added above it.
   useLayoutEffect(() => {
-    const anchor = olderAnchor.current;
-    if (!anchor || messages[0]?.id === anchor.firstId) return;
-    const retained = anchor.nodes.find((item) => item.node.isConnected);
-    if (retained && scroll.current && !follow.current)
-      scroll.current.scrollTop +=
-        retained.node.getBoundingClientRect().top - retained.top;
-    ignoreHistoryResize.current = true;
-    olderAnchor.current = null;
-    syncFollow();
-  }, [messages]);
-  useLayoutEffect(() => {
-    if (!controller.loadingOlder) olderAnchor.current = null;
-  }, [controller.loadingOlder]);
+    const container = scroll.current;
+    const history = historyRef.current;
+    if (!container || !history || !groups.length) return;
+    const kept = anchor.current;
+    if (kept?.node.isConnected && !follow.current) {
+      container.scrollTop += kept.node.getBoundingClientRect().top - kept.top;
+      kept.top = kept.node.getBoundingClientRect().top;
+    }
+    const target = goal || screensPerPage * container.clientHeight;
+    if (history.offsetHeight < target && start > 0) {
+      ignoreHistoryResize.current = true;
+      const next =
+        goal === Number.POSITIVE_INFINITY ? 0 : Math.max(0, start - fillStep);
+      setWindowStart(firstMessageId(groups[next] as MessageGroup));
+      return;
+    }
+    if (
+      history.offsetHeight < target &&
+      controller.hasOlderMessages &&
+      !controller.olderError
+    ) {
+      if (!controller.loadingOlder) {
+        ignoreHistoryResize.current = true;
+        void controller.loadOlder();
+      }
+      return;
+    }
+    anchor.current = null;
+    const first = groups[start];
+    if (windowStart === null && first) setWindowStart(firstMessageId(first));
+  });
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -210,7 +296,7 @@ export function Chat({
       scroll.current.scrollTop = scroll.current.scrollHeight;
   }, [messages, live.text, live.thinking, live.tools.length, live.streaming]);
   const toLatest = (behavior: ScrollBehavior = "auto") => {
-    olderAnchor.current = null;
+    anchor.current = null;
     setFollow(true);
     const container = scroll.current;
     if (!container) return;
@@ -272,33 +358,13 @@ export function Chat({
           syncFollow();
           // Keep the reading anchor current if the researcher moves while a
           // preceding page is in flight; streamed replies may arrive as well.
-          for (const item of olderAnchor.current?.nodes ?? [])
-            if (item.node.isConnected)
-              item.top = item.node.getBoundingClientRect().top;
-          if (
-            element.scrollTop < 160 &&
-            !follow.current &&
-            controller.hasOlderMessages &&
-            !controller.olderError
-          )
-            loadOlder();
+          const kept = anchor.current;
+          if (kept?.node.isConnected)
+            kept.top = kept.node.getBoundingClientRect().top;
+          setNearTop(element.scrollTop < element.clientHeight * 0.75);
         }}
       >
         <div className="chat-content" ref={contentRef}>
-          {controller.hasOlderMessages && (
-            <div className="chat-history-loader">
-              <button
-                type="button"
-                className="text-button"
-                disabled={controller.loadingOlder}
-                onClick={loadOlder}
-              >
-                {controller.loadingOlder
-                  ? t("chat.loadingOlder")
-                  : t("chat.loadOlder")}
-              </button>
-            </div>
-          )}
           {controller.olderError && (
             <Notice error>{controller.olderError}</Notice>
           )}
@@ -341,8 +407,8 @@ export function Chat({
               </div>
             </div>
           )}
-          <div>
-            {groups.map((group) =>
+          <div ref={historyRef}>
+            {shown.map((group) =>
               group.kind === "tools" ? (
                 <div key={group.id} data-message-id={group.id}>
                   <ToolCallGroup items={group.items} />
@@ -375,6 +441,7 @@ export function Chat({
               )}
           </div>
           {working && <WorkingIndicator live={live} queued={queued} />}
+          {!working && state && <WaitingIndicator jobs={jobs} />}
           {live.retry && <Notice>{t("chat.retrying", live.retry)}</Notice>}
           {live.error && !working && (
             <Notice error>{t("chat.error", { message: live.error })}</Notice>
@@ -387,6 +454,27 @@ export function Chat({
           )}
         </div>
       </div>
+      {hasMore && (nearTop || loadingAll) && (
+        <div className="history-float">
+          <button
+            type="button"
+            disabled={controller.loadingOlder || loadingAll}
+            onClick={loadMore}
+          >
+            {controller.loadingOlder && !loadingAll
+              ? t("chat.loadingOlder")
+              : t("chat.loadMore")}
+          </button>
+          <button
+            type="button"
+            disabled={loadingAll}
+            onClick={loadAll}
+            title={t("chat.loadAllHint")}
+          >
+            {loadingAll ? t("chat.loadingAll") : t("chat.loadAll")}
+          </button>
+        </div>
+      )}
       {!following && (
         <button
           type="button"

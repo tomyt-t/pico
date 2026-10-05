@@ -209,3 +209,65 @@ button.activity-scrim {
     background: var(--scrim);
   }
 }
+
+/* Execution and agent summary shown on hover or focus. */
+.activity-hover {
+  position: relative;
+}
+.hover-card {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  gap: 12px;
+  width: max-content;
+  min-width: 260px;
+  max-width: min(360px, calc(100vw - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+}
+.hover-section {
+  display: grid;
+  gap: 6px;
+}
+.hover-section ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hover-item {
+  display: grid;
+  gap: 3px;
+}
+.hover-item-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.hover-item-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hover-bar {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.hover-bar > .hover-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}

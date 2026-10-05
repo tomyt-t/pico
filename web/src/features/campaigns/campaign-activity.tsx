@@ -1,4 +1,4 @@
-import type { AgentRun, Campaign, Lab } from "@pico/server/contracts";
+import type { AgentRun, Campaign, Job, Lab } from "@pico/server/contracts";
 import { useEffect, useRef, useState } from "react";
 import { labPath } from "@/web/api/http-client";
 import { useAction } from "@/web/api/use-action";
@@ -32,12 +32,19 @@ export function useLabActivity(labId: string | null) {
     labId ? labPath(labId, "/agent-runs?active=1") : null,
     2000,
   );
+  // Detached jobs keep working while Pico is idle, e.g. a training run.
+  const jobs = usePoll<Job[]>(
+    labId ? labPath(labId, "/jobs?status=running") : null,
+    5000,
+  );
   return {
     campaigns,
     agents,
+    jobs,
     refresh: () => {
       campaigns.refresh();
       agents.refresh();
+      jobs.refresh();
     },
   };
 }
@@ -235,7 +242,7 @@ export function CampaignActivity({
 }) {
   const { t } = useTranslation();
   const own = useLabActivity(activity ? null : lab.id);
-  const { campaigns, agents, refresh } = activity ?? own;
+  const { campaigns, agents, jobs, refresh } = activity ?? own;
   const [sheet, setSheet] = useState<SheetView | null>(null);
   const [creating, setCreating] = useState(false);
   const [history, setHistory] = useState(false);
@@ -278,7 +285,7 @@ export function CampaignActivity({
   const standalone = sortedRuns(
     agents.data?.filter((run) => !run.campaignId && isActiveRun(run)) ?? [],
   );
-  const summary = summarize(campaigns.data, agents.data);
+  const summary = summarize(campaigns.data, agents.data, jobs.data);
   const now = useNow(summary.busy);
   return (
     <aside

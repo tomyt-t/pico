@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { now } from "./db";
 
-/** SHA-256 prefixes of the factory defaults that named Pi's tools. Seeds never
+/** SHA-256 prefixes of earlier factory defaults (most named Pi's tools). Seeds never
  *  overwrite the database, so a stored text still equal to its old default is
  *  replaced by the current default; anything the researcher edited stays. */
 const previous = {
@@ -46,7 +46,8 @@ const previous = {
       when_to_use: "6d25a3bc6f25b381",
     },
     experimentation: {
-      instructions: "18890a509bbc6dc8",
+      // The default before job progress lines; the Pi-era text was replaced earlier.
+      instructions: "491562a6a6deb5bf",
       when_to_use: "5f8f853d706fefad",
     },
     "critical-analysis": {

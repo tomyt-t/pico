@@ -77,11 +77,6 @@
   padding: 10vh 0 20px;
   margin: auto;
 }
-.chat-history-loader {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
-}
 .chat-intro .pico-mark {
   margin-bottom: 24px;
   width: 40px;
@@ -613,4 +608,30 @@ button.message-action:hover {
   .model-pill select {
     max-width: 100%;
   }
+}
+/* Floating history controls at the top of the conversation. */
+.history-float {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: inline-flex;
+  gap: 8px;
+  max-width: calc(100% - 32px);
+}
+.history-float button {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+.history-float button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
